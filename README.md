@@ -10,10 +10,11 @@ $$h_{i-1}\,h_{i+1} \le h_i^2 \qquad (1 \le i \le e-1).$$
 
 This repository contains a **candidate affirmative proof, in every characteristic**, together with the prompt that produced it, the working notes from the multi-agent search, and independent numerical verification code.
 
-## Status — read this first
+## Status
 
 - The proof is **AI-generated** (a multi-agent LLM run; the exact prompt is in [`prompt/`](prompt/)).
 - It has been **adversarially machine-audited**: every numbered step was independently re-derived; the single external dependency (Stanley's theorem on codimension-3 Gorenstein $h$-vectors, via Zanello's characteristic-free proof) was verified line-by-line down to Macaulay's theorem; and the fragile steps were stress-tested numerically in characteristics 2, 3, 5 and 0 (see [`verification/`](verification/)).
+- Also, a very helpful person on the subreddit made a lean verification at https://github.com/SamSprin/LeanProofVerification 
 - It has **not yet been refereed by a human expert**. Until it has, it should be treated as a candidate proof, not a theorem. Scrutiny, bug reports, and counterexample attempts are welcome — please open an issue.
 
 ## The argument in one paragraph
@@ -35,11 +36,7 @@ Reindex the graded Matlis dual of $A$ as a module $M$ with Hilbert function $g_d
 
 Two snapshots of the orchestrator's progress updates during the multi-agent search (agent chips show the parallel approach families from [`notes/approach_registry.md`](notes/approach_registry.md)).
 
-Early rounds: the portfolio is opened, a Boij–Söderberg route is floated and then **killed by a concrete negative result** — a numerically consistent fake Betti table with $h = (1,3,6,10,15,13,12,6,2)$ that fails log-concavity, proving resolution numerics alone can't force the theorem:
-
 ![Early search: portfolio of approaches and the fake-Betti-table dead end](assets/trace-1.png)
-
-Later rounds: the pivot to the dual-resolution formulation $0 \to R(-e-3) \to F_2 \to F_1 \to R^2 \to M \to 0$, and the moment the final mechanism came together — the rank-one dichotomy, the cyclic Gorenstein submodule, and adversarial agents auditing the factorization and characteristic claims before accepting it:
 
 ![Later search: dual resolution pivot and the final mechanism under audit](assets/trace-2.png)
 
