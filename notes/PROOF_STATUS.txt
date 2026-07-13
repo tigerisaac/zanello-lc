@@ -1,0 +1,9 @@
+STATUS: Informal proof writeup complete (2026-07-11).
+
+File: candidate_proof.md
+Checklist in Appendix C: all mathematical audit items closed.
+Still recommended before claiming a solved conjecture publicly:
+  - independent human referee in combinatorial commutative algebra
+  - optional Lean formalization
+
+The creative/search phase is done; remaining work is external validation.
