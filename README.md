@@ -18,7 +18,7 @@ This repository contains a **candidate affirmative proof, in every characteristi
 
 ## The argument in one paragraph
 
-Reindex the graded Matlis dual of $A$ as a module $M$ with Hilbert function $g_d = h_{e-d}$; levelness of type 2 makes $M$ two-generated in degree 0, with dual minimal resolution $0 \to R(-e-3) \to F_2 \to F_1 \to R^2 \to M \to 0$. The last syzygy has rank one and **full support** (its coordinates are the minimal generators of $I$), so every proper subset of the columns of $F_2 \to F_1$ is independent over $\operatorname{Frac}(R)$. A putative log-concavity failure at a triple forces, via a rank count on degree strands, a **rank-one family of low-degree relations**. That family factors as $v \cdot J$ for a primitive equal-degree vector $v \in R^2$ and an ideal $J$, and the image of $v$ in $M$ generates a cyclic submodule whose annihilator defines an Artinian Gorenstein algebra of embedding dimension ≤ 3. A degree bound places the relevant Hilbert-function increment in that algebra's first half, where Stanley's characteristic-free theorem (Zanello's elementary proof) makes it nonnegative — producing a positive log-concavity margin and a contradiction.
+Reindex the graded Matlis dual of $A$ as a module $M$ with Hilbert function $g_d = h_{e-d}$; levelness of type 2 makes $M$ two-generated in degree 0, with dual minimal resolution $0 \to R(-e-3) \to F_2 \to F_1 \to R^2 \to M \to 0$. The last syzygy has rank one and **full support** (its coordinates are the minimal generators of $I$), so every proper subset of the columns of $F_2 \to F_1$ is independent over $\mathrm{Frac}(R)$. A putative log-concavity failure at a triple forces, via a rank count on degree strands, a **rank-one family of low-degree relations**. That family factors as $v \cdot J$ for a primitive equal-degree vector $v \in R^2$ and an ideal $J$, and the image of $v$ in $M$ generates a cyclic submodule whose annihilator defines an Artinian Gorenstein algebra of embedding dimension ≤ 3. A degree bound places the relevant Hilbert-function increment in that algebra's first half, where Stanley's characteristic-free theorem (Zanello's elementary proof) makes it nonnegative — producing a positive log-concavity margin and a contradiction.
 
 ## Repository layout
 
@@ -30,6 +30,18 @@ Reindex the graded Matlis dual of $A$ as a module $M$ with Hilbert function $g_d
 | [`verification/`](verification/) | Independent numerical verification, written from scratch (no CAS): inverse-system construction of type-2 level algebras over $\mathbb{F}_2, \mathbb{F}_3, \mathbb{F}_5, \mathbb{Q}$, checks of every structural claim of the setup, the rank-one factorization, end-to-end log-concavity, and a direct stress test of the Stanley/Zanello input. See [`verification/README.md`](verification/README.md). |
 | [`exploration/`](exploration/) | Historical search-phase scripts (enumeration, lex/Betti bounds, tensor flattenings, …). Kept as artifacts of the process; not needed for the proof and not maintained. |
 | [`REFERENCES.md`](REFERENCES.md) | The literature consulted during the run. Third-party paper sources were used locally but are **not redistributed here**; links are provided instead. |
+
+## Reasoning traces from the run
+
+Two snapshots of the orchestrator's progress updates during the multi-agent search (agent chips show the parallel approach families from [`notes/approach_registry.md`](notes/approach_registry.md)).
+
+Early rounds: the portfolio is opened, a Boij–Söderberg route is floated and then **killed by a concrete negative result** — a numerically consistent fake Betti table with $h = (1,3,6,10,15,13,12,6,2)$ that fails log-concavity, proving resolution numerics alone can't force the theorem:
+
+![Early search: portfolio of approaches and the fake-Betti-table dead end](assets/trace-1.png)
+
+Later rounds: the pivot to the dual-resolution formulation $0 \to R(-e-3) \to F_2 \to F_1 \to R^2 \to M \to 0$, and the moment the final mechanism came together — the rank-one dichotomy, the cyclic Gorenstein submodule, and adversarial agents auditing the factorization and characteristic claims before accepting it:
+
+![Later search: dual resolution pivot and the final mechanism under audit](assets/trace-2.png)
 
 ## Reproducing the numerical checks
 
