@@ -95,8 +95,15 @@ as the single named proposition `HasGradedResolutionPackage I e`.
 
 Mathlib 4.31 has a generic functorial projective-resolution API, but no
 minimal **graded** free resolutions, Hilbert-syzygy bridge, or graded
-Matlis-duality theory. Consequently the repository still cannot
-prove the *existence* of `GradedResolutionDuality`/`ResolutionPackage` from
+Matlis-duality theory. The `FormalDeps/` directory now supplies a
+machine-checked port of the homological prerequisites — Ischebeck's depth
+bound, Auslander–Buchsbaum, Cohen–Macaulay freeness, and **Hilbert's
+Syzygy Theorem** (`globalDimension (MvPolynomial (Fin n) k) = n`), all
+audited to depend only on Lean's three standard axioms (see
+`FormalDeps/README.md`) — but these are not yet bridged to the graded,
+shift-carrying data the package needs. Consequently the repository still
+cannot prove the *existence* of
+`GradedResolutionDuality`/`ResolutionPackage` from
 `IsTypeTwoLevel I e`. In exact Lean terms, the missing theorem is
 `IsTypeTwoLevel I e → HasGradedResolutionPackage I e`. The package is deliberately proof-carrying: it
 contains finite bases and shifts, localized matrices, the last
