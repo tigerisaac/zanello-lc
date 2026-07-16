@@ -8,10 +8,18 @@ module
 public import Mathlib.Algebra.Polynomial.FieldDivision
 public import Mathlib.RingTheory.KrullDimension.Polynomial
 public import Mathlib.RingTheory.RegularLocalRing.RegularRing.Basic
+import all Mathlib.GroupTheory.OreLocalization.Basic
+import all Mathlib.RingTheory.OreLocalization.Basic
+import all Mathlib.RingTheory.OreLocalization.Ring
+import all Mathlib.RingTheory.Localization.Defs
 
 /-!
 
 # Polynomial over Regular Ring
+
+The `import all`s grant unfolding rights into the localization instance
+definitions, which are otherwise not exposed across `module` boundaries
+in Lean/Mathlib v4.31.
 
 -/
 
@@ -25,16 +33,17 @@ open Set in
 lemma Polynomial.localization_at_comap_maximal_isRegularRing_isRegularRing
     [IsRegularLocalRing R] (p : Ideal R[X]) [p.IsPrime] (max : p.comap C = maximalIdeal R) :
     IsRegularLocalRing (Localization.AtPrime p) := by
-  apply (isRegularLocalRing_def _).mpr
+  apply (isRegularLocalRing_iff _).mpr
   apply le_antisymm _ (ringKrullDim_le_spanFinrank_maximalIdeal _)
   let q := (maximalIdeal R).map C
   have qle : q ≤ p := by simpa [q, ← max] using map_comap_le
   have Ker : RingHom.ker (Polynomial.mapRingHom (IsLocalRing.residue R)) = q := by
-    simpa only [residue, ker_mapRingHom, q] using congrArg (Ideal.map C) (Quotient.mkₐ_ker R _)
-  have reg := (isRegularLocalRing_def R).mp ‹_›
+    simp only [ker_mapRingHom, IsLocalRing.ker_residue, q]
+  have reg := (isRegularLocalRing_iff R).mp ‹_›
   have fg : (maximalIdeal R).FG := (isNoetherianRing_iff_ideal_fg R).mp inferInstance _
   have fg' := (Submodule.FG.finite_generators fg)
-  have ht : (maximalIdeal R).height ≤ q.height := le_of_eq (height_map_maximalIdeal R).symm
+  have ht : (maximalIdeal R).height ≤ q.height :=
+    le_of_eq (Polynomial.height_map_C (maximalIdeal R)).symm
   by_cases eq0 : p.map (Polynomial.mapRingHom (IsLocalRing.residue R)) = ⊥
   · have eq : p = (maximalIdeal R).map C := le_antisymm
       (by simpa [← Ker, ← Ideal.map_eq_bot_iff_le_ker, q]) qle
@@ -52,7 +61,8 @@ lemma Polynomial.localization_at_comap_maximal_isRegularRing_isRegularRing
       ← Submodule.FG.generators_ncard fg]
     exact le_trans (Submodule.spanFinrank_span_le_ncard_of_finite (Set.Finite.image _ fg'))
       (Set.ncard_image_le fg')
-  · let _ : q.IsPrime := Ideal.isPrime_map_C_of_isPrime (IsMaximal.isPrime' (maximalIdeal R))
+  · have _ : (maximalIdeal R).IsPrime := IsMaximal.isPrime' _
+    let _ : q.IsPrime := Ideal.isPrime_map_C_of_isPrime
     have lt : q < p := by
       apply lt_of_le_of_ne qle
       by_contra eq
@@ -74,9 +84,8 @@ lemma Polynomial.localization_at_comap_maximal_isRegularRing_isRegularRing
         exact (maximalIdeal R).span_generators.symm
     simp only [← Localization.AtPrime.map_eq_maximalIdeal, peq, Ideal.map_span]
     rw [← maximalIdeal_height_eq_ringKrullDim, ← IsLocalization.height_comap p.primeCompl,
-      IsLocalization.AtPrime.comap_maximalIdeal _ p, Ideal.height_eq_primeHeight]
-    apply le_trans _ (WithBot.coe_le_coe.mpr (Ideal.primeHeight_add_one_le_of_lt lt))
-    rw [← Ideal.height_eq_primeHeight]
+      IsLocalization.AtPrime.comap_maximalIdeal _ p]
+    apply le_trans _ (WithBot.coe_le_coe.mpr (Ideal.height_add_one_le_of_lt_of_isPrime lt))
     apply le_trans _ (WithBot.coe_le_coe.mpr (add_le_add_left ht 1))
     rw [WithBot.coe_add, maximalIdeal_height_eq_ringKrullDim, WithBot.coe_one, ← reg,
       ← Nat.cast_one, ← Nat.cast_add, Nat.cast_le]
@@ -89,7 +98,7 @@ lemma Polynomial.localization_at_comap_maximal_isRegularRing_isRegularRing
 
 theorem Polynomial.isRegularRing_of_isRegularRing [IsRegularRing R] :
     IsRegularRing R[X] := by
-  apply (isRegularRing_iff _).mpr (fun p hp ↦ ?_)
+  apply isRegularRing_iff.mpr (fun p hp ↦ ?_)
   let q := p.comap C
   let S := (Localization.AtPrime q)[X]
   let pc := Submonoid.map Polynomial.C.toMonoidHom q.primeCompl
@@ -140,32 +149,37 @@ theorem Polynomial.isRegularRing_of_isRegularRing [IsRegularRing R] :
         simp [← Polynomial.toFinsupp_apply, mem] }
   let pS := p.map (algebraMap R[X] S)
   have disj : Disjoint (pc : Set R[X]) (p : Set R[X]) := by
-    simpa [pc, q] using Set.disjoint_image_left.mpr
-      (Set.disjoint_compl_left_iff_subset.mpr (fun _ a ↦ a))
+    refine Set.disjoint_left.mpr fun {a} ha hmem ↦ ?_
+    obtain ⟨y, hy, rfl⟩ := Submonoid.mem_map.mp ha
+    exact hy hmem
   have : pS.IsPrime :=  IsLocalization.isPrime_of_isPrime_disjoint pc _ _ ‹_› disj
   have : IsLocalization.AtPrime (Localization.AtPrime pS) p := by
     convert IsLocalization.isLocalization_isLocalization_atPrime_isLocalization pc
       (Localization.AtPrime pS) pS
-    exact (IsLocalization.comap_map_of_isPrime_disjoint pc _ _ ‹_› disj).symm
-  let _ := (isRegularRing_iff R).mp ‹_› q (comap_isPrime C p)
+    exact (IsLocalization.under_map_of_isPrime_disjoint pc _ ‹_› disj).symm
+  have _ : q.IsPrime := comap_isPrime C p
+  let _ := isRegularRing_iff.mp ‹IsRegularRing R› q
   have eq : comap C pS = maximalIdeal (Localization.AtPrime q) := by
     rw [← IsLocalization.map_comap q.primeCompl _ (comap C pS),
       ← IsLocalization.map_comap q.primeCompl _ (maximalIdeal (Localization.AtPrime q))]
     simp only [comap_comap, S, pS]
+    have hcm : Ideal.comap (algebraMap R[X] S) (Ideal.map (algebraMap R[X] S) p) = p :=
+      IsLocalization.under_map_of_isPrime_disjoint pc S ‹_› disj
     rw [← Polynomial.algebraMap_eq (R := Localization.AtPrime q),
       ← IsScalarTower.algebraMap_eq R (Localization.AtPrime q) (Localization.AtPrime q)[X],
-      IsScalarTower.algebraMap_eq R R[X] (Localization.AtPrime q)[X], ← comap_comap,
-      IsLocalization.comap_map_of_isPrime_disjoint pc _ _ ‹_› disj,
+      IsScalarTower.algebraMap_eq R R[X] (Localization.AtPrime q)[X], ← comap_comap, hcm,
       IsLocalization.AtPrime.comap_maximalIdeal (Localization.AtPrime q) q]
     rfl
   let _ := localization_at_comap_maximal_isRegularRing_isRegularRing (Localization.AtPrime q) pS eq
-  exact IsRegularLocalRing.of_ringEquiv (IsLocalization.algEquiv p.primeCompl
-    (Localization.AtPrime pS) (Localization.AtPrime p)).toRingEquiv
+  exact IsRegularLocalRing.of_ringEquiv (R := Localization.AtPrime pS)
+    (R' := Localization.AtPrime p)
+    (by with_unfolding_all exact (IsLocalization.algEquiv p.primeCompl
+      (Localization.AtPrime pS) (Localization.AtPrime p)).toRingEquiv)
 
 lemma MvPolynomial.isRegularRing_of_isRegularRing [IsRegularRing R] (n : ℕ) :
     IsRegularRing (MvPolynomial (Fin n) R) := by
   induction n
-  · exact isRegularRing_of_ringEquiv (isEmptyRingEquiv R (Fin 0)).symm
+  · exact IsRegularRing.of_ringEquiv (isEmptyRingEquiv R (Fin 0)).symm
   · rename_i n ih
     let _ := Polynomial.isRegularRing_of_isRegularRing (MvPolynomial (Fin n) R)
-    exact isRegularRing_of_ringEquiv (MvPolynomial.finSuccEquiv R n).toRingEquiv.symm
+    exact IsRegularRing.of_ringEquiv (MvPolynomial.finSuccEquiv R n).toRingEquiv.symm

@@ -20,7 +20,7 @@ if [ ! -d "$SHADOW/Mathlib" ]; then
 fi
 BASE_LEAN_PATH=$(lake env printenv LEAN_PATH)
 
-# Dependency order. The last four files are not yet ported (see README.md).
+# Dependency order.
 FILES=(
   Mathlib/Algebra/Category/ModuleCat/Baer.lean
   Mathlib/RingTheory/Regular/Category.lean
@@ -49,5 +49,16 @@ for f in "${FILES[@]}"; do
     fails=$((fails + 1))
   fi
 done
+
+# Axiom audit: every audited theorem must depend only on Lean's three
+# standard axioms.
+audit=$(LEAN_PATH="$SHADOW:$BASE_LEAN_PATH" lean -R "$PORT" "$PORT/AxiomAudit.lean" 2>&1)
+echo "$audit"
+if echo "$audit" | grep "depends on axioms" \
+    | grep -qv "\[propext, Classical.choice, Quot.sound\]"; then
+  echo "AXIOM AUDIT FAILED"
+  fails=$((fails + 1))
+fi
+
 echo "done ($fails failures)"
 exit $(( fails > 0 ))

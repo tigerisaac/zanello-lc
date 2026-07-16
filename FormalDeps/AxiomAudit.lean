@@ -1,0 +1,13 @@
+import Mathlib.RingTheory.RegularLocalRing.RegularRing.Syzygy
+import Mathlib.RingTheory.Regular.AuslanderBuchsbaum
+import Mathlib.RingTheory.Regular.Ischebeck
+import Mathlib.RingTheory.CohenMacaulay.Maximal
+
+#print axioms Hilberts_Syzygy
+#print axioms AuslanderBuchsbaum
+#print axioms depth_le_ringKrullDim
+#print axioms IsRegularLocalRing.globalDimension_eq_ringKrullDim
+#print axioms IsRegularRing.globalDimension_eq_ringKrullDim
+#print axioms Polynomial.isRegularRing_of_isRegularRing
+#print axioms MvPolynomial.isRegularRing_of_isRegularRing
+#print axioms free_of_isMaximalCohenMacaulay_of_isRegularLocalRing

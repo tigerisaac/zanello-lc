@@ -38,33 +38,50 @@ lake exe cache get && lake build   # once, for the Mathlib oleans
 zsh FormalDeps/shadowbuild.sh
 ```
 
-## Status (as verified on v4.31.0)
+## Status (as verified on v4.31.0): the full chain compiles
 
-| File | Status |
+Every file compiles and `AxiomAudit.lean` confirms the key theorems —
+including `Hilberts_Syzygy`, `AuslanderBuchsbaum`,
+`depth_le_ringKrullDim` (Ischebeck),
+`free_of_isMaximalCohenMacaulay_of_isRegularLocalRing`,
+`IsRegularLocalRing.globalDimension_eq_ringKrullDim`, and
+`MvPolynomial.isRegularRing_of_isRegularRing` — depend only on `propext`,
+`Classical.choice`, `Quot.sound`. (The lone `sorry` visible in
+`CohenMacaulay/Maximal.lean` sits inside a block comment; the audit
+proves nothing depends on it.)
+
+| File | Key results |
 |---|---|
-| `Algebra/Category/ModuleCat/Baer.lean` | compiles |
-| `RingTheory/Regular/Category.lean` | compiles |
-| `RingTheory/Regular/Depth.lean` | compiles |
-| `RingTheory/Regular/Ischebeck.lean` | compiles — `depth_le_supportDim`, `depth_le_ringKrullDim` |
-| `RingTheory/Regular/AuslanderBuchsbaum.lean` | compiles — `AuslanderBuchsbaum` |
-| `RingTheory/GlobalDimension.lean` | compiles |
-| `RingTheory/CohenMacaulay/Basic.lean` | compiles |
-| `RingTheory/RegularLocalRing/Basic.lean` | compiles |
-| `RingTheory/CohenMacaulay/Maximal.lean` | compiles, **but contains one upstream `sorry`** (line 46, `Nontrivial M` for maximal CM modules) |
-| `RingTheory/RegularLocalRing/GlobalDimension.lean` | compiles — `IsRegularLocalRing.globalDimension_eq_ringKrullDim` |
-| `RingTheory/RegularLocalRing/RegularRing/Basic.lean` | **not ported** — redeclares `IsRegularRing`, which stock v4.31 already has in `RegularLocalRing/Defs`; needs dedup |
-| `RingTheory/RegularLocalRing/RegularRing/Polynomial.lean` | **not ported** (blocked on `RegularRing/Basic`) |
-| `RingTheory/RegularLocalRing/RegularRing/GlobalDimension.lean` | **not ported** (blocked on `RegularRing/Basic`) |
-| `RingTheory/RegularLocalRing/RegularRing/Syzygy.lean` | **not ported** (blocked on the above) — the Hilbert-syzygy endgame |
-| `RingTheory/RegularLocalRing/Defs.lean`, `RingTheory/Regular/IsSMulRegular.lean` | reference only — stock v4.31 already provides these modules; the compiled files above build against the stock versions |
+| `Algebra/Category/ModuleCat/Baer.lean` | Baer criterion Ext machinery |
+| `RingTheory/Regular/Category.lean`, `Depth.lean` | depth via Ext |
+| `RingTheory/Regular/Ischebeck.lean` | `depth_le_supportDim`, `depth_le_ringKrullDim` |
+| `RingTheory/Regular/AuslanderBuchsbaum.lean` | `AuslanderBuchsbaum` |
+| `RingTheory/GlobalDimension.lean` | `globalDimension`, localization principle |
+| `RingTheory/CohenMacaulay/Basic.lean`, `Maximal.lean` | CM modules; MCM over regular local ⇒ free |
+| `RingTheory/RegularLocalRing/Basic.lean` | regular local ring facts |
+| `RingTheory/RegularLocalRing/GlobalDimension.lean` | `IsRegularLocalRing.globalDimension_eq_ringKrullDim` |
+| `RegularRing/Basic.lean` | shim — stock v4.31 `Defs` already provides `IsRegularRing` |
+| `RegularRing/Polynomial.lean` | regularity of `R[X]`, `MvPolynomial (Fin n) R` |
+| `RegularRing/GlobalDimension.lean` | `IsRegularRing.globalDimension_eq_ringKrullDim` |
+| `RegularRing/Syzygy.lean` | **`Hilberts_Syzygy`**: `globalDimension (MvPolynomial (Fin n) k) = n` |
+| `RingTheory/RegularLocalRing/Defs.lean`, `RingTheory/Regular/IsSMulRegular.lean` | reference only — stock v4.31 provides these; the build uses the stock versions |
 
-## Caveats
+Porting notes for the final four files (beyond the recovered session's
+work): stock v4.31 renamed/privatized `Ideal.primeHeight` (use
+`Ideal.height` and `Ideal.sup_isMaximal_height_eq_ringKrullDim`,
+`Ideal.height_add_one_le_of_lt_of_isPrime`), renamed
+`comap_map_of_isPrime_disjoint` to `under_map_of_isPrime_disjoint`, and
+provides `IsLocalRing.ker_residue` and `Polynomial.height_map_C`. One
+localization instance-path defeq (OreLocalization vs `CommRing`-derived)
+is not exposed across `module` boundaries; `Polynomial.lean` pins it with
+named type arguments plus `by with_unfolding_all exact ...`.
 
-- The one upstream `sorry` means any result depending on
-  `CohenMacaulay/Maximal`'s nontriviality lemma would carry `sorryAx`; it
-  must be proved (or routed around) before this chain can feed the main
-  development's axiom-clean audit.
-- Nothing here is imported by `LogConcavity.lean` yet. Even with `Syzygy`
-  ported, bridging from finite global dimension to the *graded minimal*
-  resolution and duality data of `HasGradedResolutionPackage` remains open
-  (see `Scratch.lean` for the graded scaffold built so far).
+## Remaining gap to the main development
+
+Nothing here is imported by `LogConcavity.lean` yet. `Hilberts_Syzygy`
+supplies the abstract finiteness input (global dimension of
+`k[x₁,x₂,x₃]` is 3), but bridging from categorical projective dimension
+to the *graded minimal* resolution-with-shifts and duality data of
+`HasGradedResolutionPackage` (graded Matlis duality, minimality, the
+critical-branch construction) remains open — see `Scratch.lean` for the
+graded scaffold built so far.
