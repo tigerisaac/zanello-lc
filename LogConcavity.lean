@@ -42,12 +42,41 @@ set of structural hypotheses.
 * **`theorem1_full`** chains Layer 2 into Layer 1 and transfers back from the
   reindexed dual `g` to `h` by reversal.
 
+* **Formal-algebra layer** — the actual starting object of the paper
+  (roadmap item 1): `R = k[x₁,x₂,x₃]` with its monomial grading, a
+  homogeneous ideal `I`, the graded quotient `A = R/I` with graded pieces
+  `quotPiece` and Hilbert function `hilb`, its socle, and the predicate
+  `IsTypeTwoLevel` (Artinian, embedding dimension three, socle concentrated
+  in degree `e`, type two).  Machine-checked: the dimension count
+  `dim_k R_n = N n` (stars and bars, `finrank_homogeneousSubmodule`), the
+  profile `h₀ = 1`, `h₁ = 3`, `h_e = 2`, `h_t = 0` for `t > e`
+  (`hilb_zero`, `IsTypeTwoLevel.hilb_one`, `IsTypeTwoLevel.hilb_top`,
+  `IsTypeTwoLevel.hilb_vanish`), the necessary bound `2 ≤ e`, and the
+  discharge of the hypotheses `hnn`,
+  `hquot` (`hilb_nonneg`, `hilb_le_Nz`) and `hGor`
+  (`GorensteinQuotientHF.bounds`, over the *concrete* Gorenstein predicate
+  `GorensteinQuotientHF`).  `theorem1_of_level` restates the main theorem
+  from this formal object with those hypotheses derived rather than assumed.
+
+* **Resolution bridge (roadmap items 2--10)** — `gradedDualPiece` constructs
+  `Hom_k(A_{e-d},k)` and proves dimension reversal; `GradedResolutionDuality`
+  records the finite bases, shifts, localized matrices, last-differential
+  generator coordinates, and degreewise exact presentations unavailable in
+  Mathlib.  Rank–nullity derives the Hilbert-series identity and the critical
+  presentation dimension rather than accepting either numerical equality as
+  a field.  The generator data also prove the upper shift bound and the
+  absence of lower-degree ideal elements.  Lean then defines the Betti
+  multiplicities and ranks/nullities, proves (3), the `ε=1` and `r=0`
+  consequences, and constructs the primitive-line critical branch.
+  Degreewise rank-nullity for the coefficient and annihilator ideals proves
+  equation (8).  `theorem1_of_resolution`
+  consumes this proof-carrying package and Stanley's theorem, with none of
+  the old numerical hypotheses in its signature.
+
 ## What remains assumed (and exactly why)
 
-Mathlib today has no graded Matlis duality, no minimal graded free
-resolutions, and no Stanley theorem for codimension-three Gorenstein
-h-vectors, so the following *structural* facts enter as named hypotheses of
-`theorem1_full`, each annotated with its source in the paper:
+The legacy numerical theorem `theorem1_full` retains the following named
+hypotheses, each annotated with its source in the paper:
 
 * `hrev`  — `g_d = h_{e-d}` (graded Matlis duality, p. 1);
 * `hquot` — `h_t ≤ N_t` (`A` is a quotient of `R`);
@@ -69,6 +98,22 @@ h-vectors, so the following *structural* facts enter as named hypotheses of
 * `hStanley` — **Stanley's theorem (Lemma 1)**, the sole major imported
   structural theorem: a codimension-≤3 Gorenstein Hilbert function of
   socle degree `E` is nondecreasing through degree `⌊E/2⌋`.
+
+In the formal-algebra form `theorem1_of_level`, the hypotheses `hnn`,
+`hquot`, and `hGor` are *derived* from a formally defined type-two level
+algebra and the abstract predicate `Gor` is instantiated at the concrete
+`GorensteinQuotientHF`; what remains assumed there is `hrev`, `hres`,
+`hrε`, `h3`, `hε1`, `hr0`, `hr1` — now stated about the concrete Hilbert
+function `hilb I` of the formal algebra, i.e. precisely specified open
+lemmas (roadmap items 2–10) — plus `hStanley` (item 12).
+
+The stronger `theorem1_of_resolution` replaces that entire list by a
+`GradedResolutionDuality`/`ResolutionPackage` pair.  Mathlib today has no
+minimal graded free resolutions or graded Matlis-duality construction, so
+the existence of that proof-carrying pair is not yet derived from
+`IsTypeTwoLevel`; Stanley is the other explicit input.  Thus this theorem
+is conditional on the missing resolution/duality existence theorem and
+Stanley, rather than on unrelated numerical functions.
 
 Everything else — every inequality, identity, sum manipulation and case
 split in the paper — is proved below with **no `sorry` and no extra axioms**
@@ -572,6 +617,12 @@ of the graded free module with `f b` summands `R(−b)`. -/
 noncomputable def shiftSum (u : ℤ) (f : ℤ → ℤ) (t : ℤ) : ℤ :=
   ∑ b ∈ Finset.Icc (0 : ℤ) u, f b * Nz (t - b)
 
+lemma shiftSum_nonneg (u : ℤ) {f : ℤ → ℤ} (hf : ∀ b, 0 ≤ f b) (t : ℤ) :
+    0 ≤ shiftSum u f t := by
+  apply Finset.sum_nonneg
+  intro b _
+  exact mul_nonneg (hf b) (Nz_nonneg _)
+
 /-- If all coefficients with shift ≤ `t` vanish, the sum vanishes. -/
 lemma shiftSum_vanish (u : ℤ) (f : ℤ → ℤ) (t : ℤ)
     (hlow : ∀ b, 0 ≤ b → b ≤ t → f b = 0) : shiftSum u f t = 0 := by
@@ -886,6 +937,1413 @@ theorem theorem1_full
     (deep_dispatch e g h p q r ε Gor hquot hrev hp0 hq0 hres hrε h3 hε1 hr0
       hr1 hGor hStanley)
 
+/-! ## The formal algebraic input (roadmap item 1)
+
+This section begins the programme of deriving the structural hypotheses of
+`theorem1_full` from an actual formal algebra rather than assuming their
+numerical shadows.  It formalizes the paper's *starting object*:
+
+  `R = k[x₁,x₂,x₃]`,  `A = R/I`,  `I` homogeneous,
+
+standard graded (the degree-`n` piece of `A` being the image of `R_n`),
+Artinian (finite-dimensional over `k`), of embedding dimension three, with
+socle concentrated in degree `e` and of dimension two — a codimension-three
+level algebra of type two (`IsTypeTwoLevel`) — together with its honest
+Hilbert function `hilb I : ℤ → ℤ`.
+
+Machine-checked here, from that formal object:
+
+* the dimension count `dim_k R_n = binom(n+2,2) = N n` (stars and bars),
+  giving `h_t ≤ N_t` for any graded quotient — the hypotheses `hnn` and
+  `hquot` of `theorem1_full` become theorems (`hilb_nonneg`, `hilb_le_Nz`);
+* a *concrete* Gorenstein predicate `GorensteinQuotientHF` — "`B` is the
+  Hilbert function of a standard graded Artinian quotient of `R` with
+  one-dimensional socle concentrated in degree `E`" — whose elementary
+  bounds discharge the hypothesis `hGor` (`GorensteinQuotientHF.bounds`),
+  and which turns `hStanley` into a faithful statement of Stanley's theorem
+  about actual Gorenstein quotients of `k[x₁,x₂,x₃]` rather than a
+  statement about an abstract predicate variable;
+* `theorem1_of_level`: the main theorem restated from the formal algebra,
+  with `hnn`, `hquot`, `hGor` *derived* rather than assumed.  The remaining
+  hypotheses (`hrev`, `hres`, `hrε`, `h3`, `hε1`, `hr0`, `hr1`, `hStanley`)
+  are now propositions about the concrete Hilbert function of `A = R/I`,
+  i.e. precisely specified lemmas awaiting the resolution-theoretic
+  development (roadmap items 2–10), plus Stanley's theorem (item 12). -/
+
+section FormalAlgebra
+
+open MvPolynomial Module
+
+attribute [local instance] MvPolynomial.gradedAlgebra
+
+variable (k : Type*) [Field k]
+
+/-- The ambient polynomial ring `R = k[x₁,x₂,x₃]`. -/
+abbrev R3 := MvPolynomial (Fin 3) k
+
+/-- **Stars and bars**: exponent vectors of total degree `n` in three
+variables correspond to multisets of size `n` over `Fin 3`. -/
+noncomputable def degreeSetEquivSym (n : ℕ) :
+    ↥{d : Fin 3 →₀ ℕ | d.degree = n} ≃ Sym (Fin 3) n :=
+  (Equiv.subtypeEquivRight fun d => by
+    simp [Finsupp.degree_apply, Finsupp.sum]).trans (Sym.equivNatSum (Fin 3) n).symm
+
+noncomputable instance (n : ℕ) : Fintype ↥{d : Fin 3 →₀ ℕ | d.degree = n} :=
+  Fintype.ofEquiv (Sym (Fin 3) n) (degreeSetEquivSym n).symm
+
+/-- **The dimension count of roadmap item 1**: the degree-`n` piece of
+`R = k[x₁,x₂,x₃]` has dimension `binom(n+2,2) = N n`, by the monomial
+basis and stars and bars. -/
+theorem finrank_homogeneousSubmodule (n : ℕ) :
+    finrank k (homogeneousSubmodule (Fin 3) k n) = (n + 2).choose 2 := by
+  have e1 : finrank k (homogeneousSubmodule (Fin 3) k n)
+      = finrank k (Finsupp.supported k k {d : Fin 3 →₀ ℕ | d.degree = n}) := by
+    rw [homogeneousSubmodule_eq_finsupp_supported]
+    rfl
+  have e2 : finrank k (Finsupp.supported k k {d : Fin 3 →₀ ℕ | d.degree = n})
+      = finrank k ((↥{d : Fin 3 →₀ ℕ | d.degree = n}) →₀ k) :=
+    (Finsupp.supportedEquivFinsupp _).finrank_eq
+  have e3 : finrank k ((↥{d : Fin 3 →₀ ℕ | d.degree = n}) →₀ k)
+      = Fintype.card ↥{d : Fin 3 →₀ ℕ | d.degree = n} :=
+    finrank_finsupp_self k
+  have e4 : Fintype.card ↥{d : Fin 3 →₀ ℕ | d.degree = n}
+      = Fintype.card (Sym (Fin 3) n) :=
+    Fintype.card_congr (degreeSetEquivSym n)
+  have e5 : Fintype.card (Sym (Fin 3) n)
+      = (Fintype.card (Fin 3) + n - 1).choose n :=
+    Sym.card_sym_eq_choose n
+  have e6 : (Fintype.card (Fin 3) + n - 1).choose n = (n + 2).choose 2 := by
+    have h := Nat.choose_symm (show 2 ≤ n + 2 by omega)
+    rw [Nat.add_sub_cancel] at h
+    rw [Fintype.card_fin, show 3 + n - 1 = n + 2 by omega, h]
+  omega
+
+instance homogeneousSubmodule_finiteDimensional (n : ℕ) :
+    FiniteDimensional k (homogeneousSubmodule (Fin 3) k n) :=
+  FiniteDimensional.of_finrank_pos <| by
+    rw [finrank_homogeneousSubmodule k n]
+    exact Nat.choose_pos (by omega)
+
+variable {k}
+
+/-- The degree-`n` graded piece of `A = R/I`: the image of `R_n` under the
+quotient map.  For a homogeneous ideal this is the standard grading of `A`. -/
+noncomputable def quotPiece (I : Ideal (R3 k)) (n : ℕ) : Submodule k (R3 k ⧸ I) :=
+  (homogeneousSubmodule (Fin 3) k n).map (Ideal.Quotient.mkₐ k I).toLinearMap
+
+/-- The (integer-indexed) Hilbert function of `A = R/I`:
+`hilb I t = dim_k A_t`, vanishing in negative degrees. -/
+noncomputable def hilb (I : Ideal (R3 k)) (t : ℤ) : ℤ :=
+  if 0 ≤ t then (finrank k (quotPiece I t.toNat) : ℤ) else 0
+
+lemma hilb_neg (I : Ideal (R3 k)) {t : ℤ} (ht : t < 0) : hilb I t = 0 := by
+  rw [hilb, if_neg (by omega)]
+
+/-- The hypothesis `hnn` of `theorem1_full`, now a theorem: dimensions are
+nonnegative. -/
+lemma hilb_nonneg (I : Ideal (R3 k)) (t : ℤ) : 0 ≤ hilb I t := by
+  rw [hilb]
+  split
+  · exact Int.natCast_nonneg _
+  · exact le_refl 0
+
+/-- The hypothesis `hquot` of `theorem1_full`, now a theorem: `A` is a
+degreewise quotient of `R`, so `h_t = dim A_t ≤ dim R_t = N_t`. -/
+lemma hilb_le_Nz (I : Ideal (R3 k)) (t : ℤ) : hilb I t ≤ Nz t := by
+  rw [hilb, Nz]
+  by_cases ht : 0 ≤ t
+  · rw [if_pos ht, if_pos ht]
+    have hle : finrank k (quotPiece I t.toNat)
+        ≤ finrank k (homogeneousSubmodule (Fin 3) k t.toNat) :=
+      Submodule.finrank_map_le _ _
+    have heq := finrank_homogeneousSubmodule k t.toNat
+    rw [N]
+    exact_mod_cast hle.trans_eq heq
+  · rw [if_neg ht, if_neg ht]
+
+/-- The socle of `A = R/I`: the elements killed by (the images of) all
+three variables — equivalently, by the irrelevant maximal ideal — as a
+`k`-submodule of `A`. -/
+def socle (I : Ideal (R3 k)) : Submodule k (R3 k ⧸ I) where
+  carrier := {a | ∀ j : Fin 3, Ideal.Quotient.mk I (X j) * a = 0}
+  add_mem' := by
+    intro a b ha hb j
+    rw [mul_add, ha j, hb j, add_zero]
+  zero_mem' := fun j => mul_zero _
+  smul_mem' := by
+    intro c a ha j
+    rw [mul_smul_comm, ha j, smul_zero]
+
+/-- **The formal algebraic input of the paper (roadmap item 1)**:
+`A = R/I` is a standard graded Artinian level `k`-algebra of embedding
+dimension three, socle degree `e`, and type two.  Concretely:
+
+* `I` is homogeneous and proper, so `A = R/I` is a standard graded algebra;
+* `I` contains no linear forms — embedding dimension three;
+* `A` is finite-dimensional over `k` — Artinian;
+* the graded pieces of `A` vanish above degree `e`;
+* the socle is contained in the degree-`e` piece (levelness; the reverse
+  containment is automatic) and has dimension two — so the socle is
+  concentrated in degree exactly `e` (it is nonzero) and `A` has type two. -/
+structure IsTypeTwoLevel (I : Ideal (R3 k)) (e : ℕ) : Prop where
+  homogeneous : I.IsHomogeneous (homogeneousSubmodule (Fin 3) k)
+  proper : I ≠ ⊤
+  no_linear_forms : ∀ f ∈ I, MvPolynomial.IsHomogeneous f 1 → f = 0
+  finiteDimensional : FiniteDimensional k (R3 k ⧸ I)
+  vanish_above : ∀ n : ℕ, e < n → quotPiece I n = ⊥
+  socle_concentrated : socle I ≤ quotPiece I e
+  type_two : finrank k (socle I) = 2
+
+/-! ### Faithfulness of the formal object
+
+The structure `IsTypeTwoLevel` provably yields the Hilbert-function profile
+claimed in the statement of Theorem 1 — `h = (1, 3, h₂, …, h_e = 2)`,
+vanishing above the socle degree.  Beyond validating the definition, these
+lemmas are the first ones to *consume* the structure fields. -/
+
+/-- If `I` contains no nonzero homogeneous element of degree `n`, the
+degree-`n` piece of `A = R/I` has the full dimension `N n`: the quotient
+map is injective on `R_n`. -/
+lemma finrank_quotPiece_eq (I : Ideal (R3 k)) (n : ℕ)
+    (hdisj : ∀ f ∈ I, MvPolynomial.IsHomogeneous f n → f = 0) :
+    finrank k (quotPiece I n) = (n + 2).choose 2 := by
+  set g : ↥(homogeneousSubmodule (Fin 3) k n) →ₗ[k] R3 k ⧸ I :=
+    (Ideal.Quotient.mkₐ k I).toLinearMap.comp
+      (homogeneousSubmodule (Fin 3) k n).subtype with hgdef
+  have hker : LinearMap.ker g = ⊥ := by
+    rw [Submodule.eq_bot_iff]
+    intro y hy
+    have hgy := LinearMap.mem_ker.mp hy
+    have hy0 : Ideal.Quotient.mk I (y : R3 k) = 0 := by
+      simpa [hgdef, Ideal.Quotient.mkₐ_eq_mk] using hgy
+    exact Subtype.ext
+      (hdisj _ (Ideal.Quotient.eq_zero_iff_mem.mp hy0)
+        ((mem_homogeneousSubmodule n _).mp y.2))
+  have hrange : LinearMap.range g = quotPiece I n := by
+    rw [hgdef, LinearMap.range_comp, Submodule.range_subtype]
+    rfl
+  have hcount := LinearMap.finrank_range_add_finrank_ker g
+  rw [hrange, hker, finrank_bot] at hcount
+  rw [← finrank_homogeneousSubmodule k n]
+  omega
+
+/-- `h₀ = 1` for every proper quotient of `R`: a nonzero constant in `I`
+would be a unit. -/
+lemma hilb_zero (I : Ideal (R3 k)) (hI : I ≠ ⊤) : hilb I 0 = 1 := by
+  have hdisj : ∀ f ∈ I, MvPolynomial.IsHomogeneous f 0 → f = 0 := by
+    intro f hfI hfhom
+    by_contra hf0
+    obtain ⟨c, rfl⟩ : ∃ c, f = MvPolynomial.C c :=
+      ⟨f.coeff 0, MvPolynomial.totalDegree_eq_zero_iff_eq_C.mp
+        ((MvPolynomial.totalDegree_zero_iff_isHomogeneous _).mpr hfhom)⟩
+    have hc0 : c ≠ 0 := fun hc => hf0 (by rw [hc, map_zero])
+    have hmem : MvPolynomial.C c⁻¹ * MvPolynomial.C c ∈ I := I.mul_mem_left _ hfI
+    rw [← map_mul, inv_mul_cancel₀ hc0, map_one] at hmem
+    exact hI ((Ideal.eq_top_iff_one I).mpr hmem)
+  have h := finrank_quotPiece_eq I 0 hdisj
+  rw [hilb, if_pos le_rfl, show ((0 : ℤ)).toNat = 0 from rfl, h]
+  decide
+
+/-- `h₁ = 3`: embedding dimension three means `I` contains no linear form. -/
+lemma IsTypeTwoLevel.hilb_one {I : Ideal (R3 k)} {e : ℕ}
+    (hA : IsTypeTwoLevel I e) : hilb I 1 = 3 := by
+  have h := finrank_quotPiece_eq I 1 hA.no_linear_forms
+  rw [hilb, if_pos (by norm_num), show ((1 : ℤ)).toNat = 1 from rfl, h]
+  decide
+
+/-- `h₀ = 1`, structure form. -/
+lemma IsTypeTwoLevel.hilb_zero {I : Ideal (R3 k)} {e : ℕ}
+    (hA : IsTypeTwoLevel I e) : hilb I 0 = 1 :=
+  LogConcavity.hilb_zero I hA.proper
+
+/-- Multiplication by a variable raises degree by one — the standard-graded
+structure of the quotient. -/
+lemma quotPiece_X_mul {I : Ideal (R3 k)} (j : Fin 3) {n : ℕ} {a : R3 k ⧸ I}
+    (ha : a ∈ quotPiece I n) :
+    Ideal.Quotient.mk I (X j) * a ∈ quotPiece I (n + 1) := by
+  obtain ⟨f, hf, rfl⟩ := Submodule.mem_map.mp ha
+  refine Submodule.mem_map.mpr ⟨X j * f, ?_, ?_⟩
+  · have hX := (isHomogeneous_X k j).mul ((mem_homogeneousSubmodule n f).mp hf)
+    rw [Nat.add_comm] at hX
+    exact (mem_homogeneousSubmodule _ _).mpr hX
+  · simp [Ideal.Quotient.mkₐ_eq_mk, map_mul]
+
+/-- Levelness upgrade: the socle *equals* the top graded piece (the reverse
+containment to `socle_concentrated` is automatic from `vanish_above`). -/
+lemma IsTypeTwoLevel.socle_eq {I : Ideal (R3 k)} {e : ℕ}
+    (hA : IsTypeTwoLevel I e) : socle I = quotPiece I e := by
+  refine le_antisymm hA.socle_concentrated fun a ha => ?_
+  show ∀ j : Fin 3, Ideal.Quotient.mk I (X j) * a = 0
+  intro j
+  have hmem := quotPiece_X_mul j ha
+  rw [hA.vanish_above (e + 1) (Nat.lt_succ_self e)] at hmem
+  simpa using hmem
+
+/-- `h_e = 2`: the top graded piece coincides with the two-dimensional
+socle — the "type two" and "socle degree `e`" of the theorem. -/
+lemma IsTypeTwoLevel.hilb_top {I : Ideal (R3 k)} {e : ℕ}
+    (hA : IsTypeTwoLevel I e) : hilb I (e : ℤ) = 2 := by
+  rw [hilb, if_pos (Int.natCast_nonneg e), Int.toNat_natCast, ← hA.socle_eq,
+    hA.type_two]
+  norm_num
+
+/-- A type-two level quotient with embedding dimension three has socle
+degree at least two: degree zero has dimension one and degree one has
+dimension three, whereas the top piece has dimension two. -/
+lemma IsTypeTwoLevel.two_le_socleDegree {I : Ideal (R3 k)} {e : ℕ}
+    (hA : IsTypeTwoLevel I e) : 2 ≤ e := by
+  by_contra he
+  have he0 : e = 0 ∨ e = 1 := by omega
+  rcases he0 with rfl | rfl
+  · have hzero := hA.hilb_zero
+    have htop := hA.hilb_top
+    norm_num at htop
+    rw [hzero] at htop
+    norm_num at htop
+  · have hone := hA.hilb_one
+    have htop := hA.hilb_top
+    norm_num at htop
+    rw [hone] at htop
+    norm_num at htop
+
+/-- `h_t = 0` above the socle degree. -/
+lemma IsTypeTwoLevel.hilb_vanish {I : Ideal (R3 k)} {e : ℕ}
+    (hA : IsTypeTwoLevel I e) {t : ℤ} (ht : (e : ℤ) < t) : hilb I t = 0 := by
+  rw [hilb, if_pos (by omega), hA.vanish_above t.toNat (by omega)]
+  simp
+
+variable (k)
+
+/-- **The concrete Gorenstein predicate (roadmap item 11)**: `B` is the
+Hilbert function of a standard graded Artinian quotient of `k[x₁,x₂,x₃]`
+(so of embedding dimension at most three) whose socle is one-dimensional
+and concentrated in degree `E` — a graded Artinian Gorenstein algebra of
+socle degree `E`.  This replaces the abstract predicate variable `Gor` of
+`theorem1_full`: `hStanley` phrased over this predicate *is* Stanley's
+theorem (Lemma 1 of the paper) rather than a statement about an
+uninterpreted predicate. -/
+def GorensteinQuotientHF (B : ℤ → ℤ) (E : ℤ) : Prop :=
+  ∃ (J : Ideal (R3 k)) (E' : ℕ), (E' : ℤ) = E ∧
+    J.IsHomogeneous (homogeneousSubmodule (Fin 3) k) ∧
+    J ≠ ⊤ ∧
+    FiniteDimensional k (R3 k ⧸ J) ∧
+    (∀ n : ℕ, E' < n → quotPiece J n = ⊥) ∧
+    socle J ≤ quotPiece J E' ∧
+    finrank k (socle J) = 1 ∧
+    ∀ t : ℤ, B t = hilb J t
+
+variable {k}
+
+/-- The hypothesis `hGor` of `theorem1_full`, now a theorem: the Hilbert
+function of a graded quotient of `R` vanishes in negative degrees, is
+nonnegative, and is bounded by the Hilbert function of `R`. -/
+lemma GorensteinQuotientHF.bounds {B : ℤ → ℤ} {E : ℤ}
+    (hgor : GorensteinQuotientHF k B E) :
+    (∀ t : ℤ, t < 0 → B t = 0) ∧ (∀ t, 0 ≤ B t) ∧ (∀ t, B t ≤ Nz t) := by
+  obtain ⟨J, E', -, -, -, -, -, -, -, hB⟩ := hgor
+  refine ⟨fun t ht => ?_, fun t => ?_, fun t => ?_⟩
+  · rw [hB t]; exact hilb_neg J ht
+  · rw [hB t]; exact hilb_nonneg J t
+  · rw [hB t]; exact hilb_le_Nz J t
+
+/-! ## The resolution-to-numerics bridge (roadmap items 2--10)
+
+Mathlib does not yet provide minimal graded free resolutions or graded
+Matlis duality.  Accordingly, the one unavoidable input of this section is
+`GradedResolutionDuality`: a certificate for the *actual* dualized minimal
+resolution, with finite bases, shifts, localized matrices, the full-support
+circuit supplied by the last differential, and degreewise exact
+presentations.  The Hilbert-series identity is derived from those
+presentations by rank–nullity.
+
+Everything after that boundary is derived.  In particular, Betti functions
+are cardinalities of shift fibres (not arbitrary integer-valued functions),
+the localized ranks `resolutionRank` and `resolutionEpsilon` are finranks of
+actual restricted maps, and the hypotheses `hrε`, `h3`, `hε1`, and `hr0`
+are theorems.  The critical rank-one branch is represented by the graded
+objects occurring in the manuscript; its annihilator quotient and equation
+(8) are constructed below rather than supplied as a numerical assertion. -/
+
+section ResolutionBridge
+
+open scoped DirectSum
+
+/-- The degree-`n` vector-space part of an ideal. -/
+noncomputable def idealPiece (J : Ideal (R3 k)) (n : ℕ) : Submodule k (R3 k) :=
+  homogeneousSubmodule (Fin 3) k n ⊓ J.restrictScalars k
+
+noncomputable instance idealPiece_finiteDimensional
+    (J : Ideal (R3 k)) (n : ℕ) : FiniteDimensional k (idealPiece J n) := by
+  let f : idealPiece J n →ₗ[k] homogeneousSubmodule (Fin 3) k n :=
+    LinearMap.codRestrict (homogeneousSubmodule (Fin 3) k n)
+      (idealPiece J n).subtype (fun x => x.2.1)
+  exact FiniteDimensional.of_injective f fun x y h =>
+    Subtype.ext (congrArg (fun z : homogeneousSubmodule (Fin 3) k n =>
+      (z : R3 k)) h)
+
+/-- The Hilbert function of the degree pieces of an ideal, extended by zero
+to negative degrees. -/
+noncomputable def idealHilb (J : Ideal (R3 k)) (t : ℤ) : ℤ :=
+  if 0 ≤ t then (finrank k (idealPiece J t.toNat) : ℤ) else 0
+
+/-- Multiplication of a scalar polynomial by a fixed two-component vector,
+viewed as a `k`-linear map. -/
+noncomputable def vectorMul (v : Fin 2 → R3 k) :
+    R3 k →ₗ[k] (Fin 2 → R3 k) :=
+  (LinearMap.toSpanSingleton (R3 k) (Fin 2 → R3 k) v).restrictScalars k
+
+/-- The actual degree-`t` piece of `vJ`, with `v` homogeneous of degree
+`a`; negative coefficient degrees give the zero subspace. -/
+noncomputable def vJPiece (J : Ideal (R3 k)) (v : Fin 2 → R3 k)
+    (a : ℕ) (t : ℤ) : Submodule k (Fin 2 → R3 k) :=
+  if 0 ≤ t - (a : ℤ) then
+    (idealPiece J (t - (a : ℤ)).toNat).map (vectorMul v)
+  else ⊥
+
+/-- Multiplication by a nonzero vector is injective, so the degree piece of
+`vJ` has the same dimension as the corresponding degree piece of `J`. -/
+lemma finrank_vJPiece (J : Ideal (R3 k)) {v : Fin 2 → R3 k} (hv : v ≠ 0)
+    (a : ℕ) (t : ℤ) :
+    (finrank k (vJPiece J v a t) : ℤ) = idealHilb J (t - (a : ℤ)) := by
+  obtain ⟨z, hz⟩ : ∃ z, v z ≠ 0 := by
+    by_contra h
+    push Not at h
+    exact hv (funext h)
+  have hinj : Function.Injective (vectorMul v) := by
+    intro x y hxy
+    have hzxy := congrFun hxy z
+    simp only [vectorMul, LinearMap.coe_restrictScalars,
+      LinearMap.toSpanSingleton_apply, Pi.smul_apply, smul_eq_mul] at hzxy
+    exact mul_right_cancel₀ hz hzxy
+  by_cases ht : 0 ≤ t - (a : ℤ)
+  · rw [vJPiece, if_pos ht, idealHilb, if_pos ht]
+    let f := (vectorMul v).domRestrict (idealPiece J (t - (a : ℤ)).toNat)
+    have hf : Function.Injective f := hinj.comp Subtype.val_injective
+    have hcount := LinearMap.finrank_range_add_finrank_ker f
+    rw [LinearMap.ker_eq_bot.mpr hf, finrank_bot, add_zero,
+      LinearMap.range_domRestrict] at hcount
+    exact_mod_cast hcount
+  · rw [vJPiece, if_neg ht, finrank_bot, idealHilb, if_neg ht]
+    norm_num
+
+/-- Degreewise rank-nullity for `0 → J → R → R/J → 0`. -/
+lemma idealPiece_finrank_add_quotPiece (J : Ideal (R3 k)) (n : ℕ) :
+    finrank k (idealPiece J n) + finrank k (quotPiece J n) = (n + 2).choose 2 := by
+  let g : ↥(homogeneousSubmodule (Fin 3) k n) →ₗ[k] R3 k ⧸ J :=
+    (Ideal.Quotient.mkₐ k J).toLinearMap.comp
+      (homogeneousSubmodule (Fin 3) k n).subtype
+  let kerEquiv : LinearMap.ker g ≃ₗ[k] idealPiece J n :=
+    { toFun := fun x => ⟨x.1.1, ⟨x.1.2, by
+          have hxg := LinearMap.mem_ker.mp x.2
+          have hx : Ideal.Quotient.mk J x.1.1 = 0 := by
+            change Ideal.Quotient.mk J x.1.1 = 0 at hxg
+            exact hxg
+          exact Ideal.Quotient.eq_zero_iff_mem.mp hx⟩⟩
+      invFun := fun x => ⟨⟨x.1, x.2.1⟩, by
+          have hx : Ideal.Quotient.mk J x.1 = 0 :=
+            Ideal.Quotient.eq_zero_iff_mem.mpr x.2.2
+          apply LinearMap.mem_ker.mpr
+          change Ideal.Quotient.mk J x.1 = 0
+          exact hx⟩
+      left_inv := fun x => Subtype.ext (Subtype.ext rfl)
+      right_inv := fun x => Subtype.ext rfl
+      map_add' := fun _ _ => rfl
+      map_smul' := fun _ _ => rfl }
+  have hrange : LinearMap.range g = quotPiece J n := by
+    change LinearMap.range
+      ((Ideal.Quotient.mkₐ k J).toLinearMap.comp
+        (homogeneousSubmodule (Fin 3) k n).subtype) = quotPiece J n
+    rw [LinearMap.range_comp, Submodule.range_subtype]
+    rfl
+  have hcount := LinearMap.finrank_range_add_finrank_ker g
+  rw [hrange, kerEquiv.finrank_eq, finrank_homogeneousSubmodule k n] at hcount
+  omega
+
+/-- Every ideal and its quotient split the ambient degree dimension. -/
+lemma idealHilb_add_hilb (J : Ideal (R3 k)) (t : ℤ) :
+    idealHilb J t + hilb J t = Nz t := by
+  by_cases ht : 0 ≤ t
+  · have h := idealPiece_finrank_add_quotPiece J t.toNat
+    rw [idealHilb, if_pos ht, hilb, if_pos ht, Nz, if_pos ht, N]
+    exact_mod_cast h
+  · rw [idealHilb, if_neg ht, hilb, if_neg ht, Nz, if_neg ht]
+    ring
+
+/-- Degreewise membership equivalence of two ideals gives equality of their
+actual homogeneous pieces.  This is the final graded step in identifying
+`J_j` with `Ann(H)_j`. -/
+lemma idealPiece_eq_of_homogeneous_mem_iff
+    (J Ann : Ideal (R3 k)) (n : ℕ)
+    (h : ∀ f : R3 k, MvPolynomial.IsHomogeneous f n → (f ∈ J ↔ f ∈ Ann)) :
+    idealPiece J n = idealPiece Ann n := by
+  ext f
+  change (MvPolynomial.IsHomogeneous f n ∧ f ∈ J) ↔
+    (MvPolynomial.IsHomogeneous f n ∧ f ∈ Ann)
+  constructor
+  · rintro ⟨hf, hJ⟩
+    exact ⟨hf, (h f hf).mp hJ⟩
+  · rintro ⟨hf, hAnn⟩
+    exact ⟨hf, (h f hf).mpr hAnn⟩
+
+/-- The graded form of the chain used before equation (8).  Once the
+low-shift map factors through a nonzero line `Rv`, exactness identifies the
+coefficient submodule `J` with the annihilator of `H = ψ(v)` for every
+coefficient in the degree range where exactness is known. -/
+theorem line_coefficient_eq_annihilator_low
+    {R L M : Type*} [CommRing R] [IsDomain R]
+    [AddCommGroup L] [Module R L] [AddCommGroup M] [Module R M]
+    (φ : L →ₗ[R] (Fin 2 → R)) (ψ : (Fin 2 → R) →ₗ[R] M)
+    (v : Fin 2 → R) (hv : v ≠ 0)
+    (hline : ∀ x, ∃ c : R, φ x = c • v)
+    (Low : R → Prop)
+    (hexact : ∀ c, Low c →
+      (c • v ∈ LinearMap.ker ψ ↔ c • v ∈ LinearMap.range φ)) :
+    ∃ θ : L →ₗ[R] R,
+      (∀ x, φ x = θ x • v) ∧
+      LinearMap.range φ = (LinearMap.range θ).map
+        (LinearMap.toSpanSingleton R (Fin 2 → R) v) ∧
+      (∀ c, Low c →
+        (c ∈ LinearMap.range θ ↔
+          c ∈ LinearMap.ker
+            (LinearMap.toSpanSingleton R M (ψ v)))) := by
+  obtain ⟨θ, hfactor, hrange, hmem, -⟩ := line_factorization hv φ hline
+  refine ⟨θ, hfactor, hrange, fun c hc => ?_⟩
+  rw [← hmem c, ← hexact c hc]
+  simp only [LinearMap.mem_ker, LinearMap.toSpanSingleton_apply, map_smul]
+
+/-- The reindexed Hilbert function of the graded dual. -/
+noncomputable def reversedHilb (I : Ideal (R3 k)) (e : ℕ) (t : ℤ) : ℤ :=
+  hilb I ((e : ℤ) - t)
+
+/-- The actual vector-space piece `M_d = Hom_k(A_{e-d}, k)` of the graded
+dual (for natural `d`). -/
+abbrev gradedDualPiece (I : Ideal (R3 k)) (e d : ℕ) :=
+  Module.Dual k (quotPiece I (e - d))
+
+/-- Dualization preserves the degreewise dimension, giving
+`g_d = h_{e-d}` rather than assuming `hrev`. -/
+lemma finrank_gradedDualPiece (I : Ideal (R3 k)) (e d : ℕ) (hd : d ≤ e) :
+    (finrank k (gradedDualPiece I e d) : ℤ) = reversedHilb I e (d : ℤ) := by
+  rw [Subspace.dual_finrank_eq]
+  have heq : (e : ℤ) - (d : ℤ) = ((e - d : ℕ) : ℤ) := by
+    exact (Nat.cast_sub hd).symm
+  rw [reversedHilb, heq, hilb, if_pos (Int.natCast_nonneg _), Int.toNat_natCast]
+
+/-- Multiplicity of a shift in a finite homogeneous basis. -/
+noncomputable def shiftMultiplicity {ι : Type*} [Fintype ι]
+    (shift : ι → ℤ) (b : ℤ) : ℤ :=
+  ((Finset.univ.filter fun i => shift i = b).card : ℤ)
+
+lemma shiftMultiplicity_nonneg {ι : Type*} [Fintype ι]
+    (shift : ι → ℤ) (b : ℤ) : 0 ≤ shiftMultiplicity shift b := by
+  exact Int.natCast_nonneg _
+
+/-- Summing shift multiplicities over an interval counts the corresponding
+basis vectors.  This is the bookkeeping which turns finite shift functions
+into the paper's cumulative Betti numbers. -/
+lemma sum_shiftMultiplicity_Icc {ι : Type*} [Fintype ι]
+    (shift : ι → ℤ) (l u : ℤ) :
+    (∑ b ∈ Finset.Icc l u, shiftMultiplicity shift b) =
+      ((Finset.univ.filter fun i => l ≤ shift i ∧ shift i ≤ u).card : ℤ) := by
+  classical
+  unfold shiftMultiplicity
+  norm_cast
+  simp only [Finset.card_eq_sum_ones, Finset.sum_filter]
+  rw [Finset.sum_comm]
+  simp
+
+/-- A homogeneous polynomial of degree `m` belongs to every power at most
+`m` of the irrelevant ideal.  This is the support-theoretic form of the
+fact that all of its monomials have total degree `m`. -/
+lemma isHomogeneous_mem_pow_idealOfVars {f : R3 k} {m r : ℕ}
+    (hf : MvPolynomial.IsHomogeneous f m) (hrm : r ≤ m) :
+    f ∈ MvPolynomial.idealOfVars (Fin 3) k ^ r := by
+  rw [MvPolynomial.mem_pow_idealOfVars_iff]
+  intro x hx
+  have hx0 : f.coeff x ≠ 0 := MvPolynomial.mem_support_iff.mp hx
+  have hxdegree := hf hx0
+  have hxdegree' : x.degree = m := by
+    simpa [Finsupp.degree_apply, Finsupp.weight_apply, Finsupp.sum, smul_eq_mul]
+      using hxdegree
+  simpa [hxdegree'] using hrm
+
+/-- A homogeneous polynomial of degree `n` lying in the `(n+1)`st power
+of the irrelevant ideal is zero. -/
+lemma isHomogeneous_eq_zero_of_mem_succ_pow_idealOfVars {f : R3 k} {n : ℕ}
+    (hf : MvPolynomial.IsHomogeneous f n)
+    (hmem : f ∈ MvPolynomial.idealOfVars (Fin 3) k ^ (n + 1)) : f = 0 := by
+  apply MvPolynomial.ext
+  intro x
+  by_cases hx : x.degree = n
+  · by_contra hcoeff
+    have hsupport : x ∈ f.support := MvPolynomial.mem_support_iff.mpr hcoeff
+    have hdegree :=
+      (MvPolynomial.mem_pow_idealOfVars_iff (n + 1) f).mp hmem x hsupport
+    omega
+  · have hcoeff : f.coeff x = 0 := by
+      by_contra hcoeff
+      have hxdegree := hf hcoeff
+      have hxdegree' : x.degree = n := by
+        simpa [Finsupp.degree_apply, Finsupp.weight_apply, Finsupp.sum, smul_eq_mul]
+          using hxdegree
+      exact hx hxdegree'
+    simp [hcoeff]
+
+/-- An actual degreewise exact presentation
+`0 → k^m² → k^m¹ → k^m⁰ → M → 0`.
+
+The free vector spaces are written with explicit finite bases.  Recording
+the maps and exactness, rather than an alternating-dimension equality,
+lets rank–nullity derive the Hilbert-series coefficient formula. -/
+structure ExactPresentation (k M : Type*) [Field k] [AddCommGroup M] [Module k M]
+    (m₂ m₁ m₀ : ℕ) where
+  d₂ : (Fin m₂ → k) →ₗ[k] (Fin m₁ → k)
+  d₁ : (Fin m₁ → k) →ₗ[k] (Fin m₀ → k)
+  d₀ : (Fin m₀ → k) →ₗ[k] M
+  d₂_injective : Function.Injective d₂
+  exact₂₁ : LinearMap.range d₂ = LinearMap.ker d₁
+  exact₁₀ : LinearMap.range d₁ = LinearMap.ker d₀
+  d₀_surjective : Function.Surjective d₀
+
+namespace ExactPresentation
+
+variable {k M : Type*} [Field k] [AddCommGroup M] [Module k M]
+variable {m₂ m₁ m₀ : ℕ}
+
+/-- Euler characteristic of an exact three-step presentation, proved from
+rank–nullity. -/
+lemma finrank_add (E : ExactPresentation k M m₂ m₁ m₀) :
+    finrank k M + m₁ = m₀ + m₂ := by
+  have h₂ := LinearMap.finrank_range_add_finrank_ker E.d₂
+  have h₁ := LinearMap.finrank_range_add_finrank_ker E.d₁
+  have h₀ := LinearMap.finrank_range_add_finrank_ker E.d₀
+  have hker₂ : LinearMap.ker E.d₂ = ⊥ := LinearMap.ker_eq_bot.mpr E.d₂_injective
+  have hrange₀ : LinearMap.range E.d₀ = ⊤ :=
+    LinearMap.range_eq_top.mpr E.d₀_surjective
+  rw [hker₂, finrank_bot, add_zero,
+    Module.finrank_fintype_fun_eq_card, Fintype.card_fin] at h₂
+  rw [← E.exact₂₁] at h₁
+  rw [h₂, Module.finrank_fintype_fun_eq_card, Fintype.card_fin] at h₁
+  rw [← E.exact₁₀, hrange₀, finrank_top,
+    Module.finrank_fintype_fun_eq_card, Fintype.card_fin] at h₀
+  omega
+
+end ExactPresentation
+
+/-- An actual finite-dimensional quotient presentation `k^m → M` whose
+kernel is linearly equivalent to `K`. -/
+structure SurjectivePresentation (k M K : Type*) [Field k]
+    [AddCommGroup M] [Module k M] [AddCommGroup K] [Module k K] (m : ℕ) where
+  π : (Fin m → k) →ₗ[k] M
+  surjective : Function.Surjective π
+  kernelEquiv : LinearMap.ker π ≃ₗ[k] K
+
+namespace SurjectivePresentation
+
+variable {k M K : Type*} [Field k]
+variable [AddCommGroup M] [Module k M] [AddCommGroup K] [Module k K]
+variable {m : ℕ}
+
+/-- Rank–nullity for the certified quotient presentation. -/
+lemma finrank_add (P : SurjectivePresentation k M K m) :
+    finrank k M + finrank k K = m := by
+  have h := LinearMap.finrank_range_add_finrank_ker P.π
+  have hrange : LinearMap.range P.π = ⊤ := LinearMap.range_eq_top.mpr P.surjective
+  rw [hrange, finrank_top, P.kernelEquiv.finrank_eq,
+    Module.finrank_fintype_fun_eq_card, Fintype.card_fin] at h
+  exact h
+
+end SurjectivePresentation
+
+/-- The data unavailable in Mathlib: the finite homogeneous bases and the
+localized matrices of the dual minimal resolution
+`0 → R(-e-3) → F₂ → F₁ → R² → M → 0`, together with graded-duality and
+Hilbert-series correctness.  The last term of the original resolution is
+therefore `R(-e-3)²`; its two basis vectors are the two dual generators.
+
+The matrix fields are over `Frac(R)`, exactly where the manuscript performs
+its circuit and rank argument.  Hilbert-series correctness is represented
+by actual degreewise exact linear presentations, from which the coefficient
+identity is proved below.  The low-degree consequence of the last
+differential is likewise proved directly from the homogeneous generators. -/
+structure GradedResolutionDuality
+    (I : Ideal (R3 k)) (e : ℕ) (β₁ β₂ : Type*) [Fintype β₁] [Fintype β₂] where
+  pShift : β₁ → ℤ
+  qShift : β₂ → ℤ
+  pShift_nonneg : ∀ i, 0 ≤ pShift i
+  qShift_nonneg : ∀ j, 0 ≤ qShift j
+  degreewise_exact : ∀ n : ℕ, n ≤ e → Nonempty
+    (ExactPresentation k (gradedDualPiece I e n)
+      (shiftSum ((e : ℤ) + 3) (shiftMultiplicity qShift) (n : ℤ)).toNat
+      (shiftSum ((e : ℤ) + 3) (shiftMultiplicity pShift) (n : ℤ)).toNat
+      (2 * Nz (n : ℤ)).toNat)
+  δ₁ : β₁ → Fin 2 → R3 k
+  δ₁_ne_zero : ∀ i, δ₁ i ≠ 0
+  δ₂K : β₂ → β₁ → FractionRing (R3 k)
+  δ₂_graded_zero : ∀ j i, qShift j ≤ pShift i → δ₂K j i = 0
+  δ₁δ₂ : ∀ j,
+    ∑ i, δ₂K j i •
+      (fun z => algebraMap (R3 k) (FractionRing (R3 k)) (δ₁ i z)) = 0
+  circuit : β₂ → FractionRing (R3 k)
+  circuit_full : ∀ j, circuit j ≠ 0
+  kernel_line : ∀ c : β₂ → FractionRing (R3 k),
+    (∑ j, c j • δ₂K j) = 0 →
+      ∃ a : FractionRing (R3 k), c = a • circuit
+  idealGenerator : β₂ → R3 k
+  idealGenerator_homogeneous : ∀ j,
+    MvPolynomial.IsHomogeneous (idealGenerator j)
+      (((e : ℤ) + 3 - qShift j).toNat)
+  ideal_eq_span_generators : I = Ideal.span (Set.range idealGenerator)
+  circuit_eq_generator : ∀ j,
+    circuit j = algebraMap (R3 k) (FractionRing (R3 k)) (idealGenerator j)
+
+namespace GradedResolutionDuality
+
+variable {β₁ β₂ : Type*} [Fintype β₁] [Fintype β₂]
+variable {I : Ideal (R3 k)} {e : ℕ}
+
+/-- The actual Betti multiplicities attached to the finite shift bases. -/
+noncomputable def p (D : GradedResolutionDuality I e β₁ β₂) : ℤ → ℤ :=
+  shiftMultiplicity D.pShift
+
+/-- The actual second Betti multiplicities attached to the finite shift basis. -/
+noncomputable def q (D : GradedResolutionDuality I e β₁ β₂) : ℤ → ℤ :=
+  shiftMultiplicity D.qShift
+
+lemma p_nonneg (D : GradedResolutionDuality I e β₁ β₂) (b : ℤ) : 0 ≤ D.p b :=
+  shiftMultiplicity_nonneg _ _
+
+lemma q_nonneg (D : GradedResolutionDuality I e β₁ β₂) (b : ℤ) : 0 ≤ D.q b :=
+  shiftMultiplicity_nonneg _ _
+
+/-- The Hilbert-series coefficient identity, now derived from the actual
+degreewise exact presentations.  Negative degrees vanish by the level
+algebra's top-degree bound; nonnegative degrees are Euler characteristics
+of the exact presentations. -/
+lemma hilbert_series (D : GradedResolutionDuality I e β₁ β₂)
+    (hA : IsTypeTwoLevel I e) : ∀ t, t ≤ (e : ℤ) →
+    reversedHilb I e t = 2 * Nz t
+      - shiftSum ((e : ℤ) + 3) D.p t
+      + shiftSum ((e : ℤ) + 3) D.q t
+      - Nz (t - ((e : ℤ) + 3)) := by
+  intro t hte
+  by_cases ht : 0 ≤ t
+  · let n := t.toNat
+    have hnt : (n : ℤ) = t := Int.toNat_of_nonneg ht
+    have hne : n ≤ e := by
+      have : (n : ℤ) ≤ (e : ℤ) := hnt.trans_le hte
+      exact_mod_cast this
+    obtain E := (D.degreewise_exact n hne).some
+    have he := E.finrank_add
+    have hp0 : 0 ≤ shiftSum ((e : ℤ) + 3) D.p (n : ℤ) :=
+      shiftSum_nonneg _ D.p_nonneg _
+    have hq0 : 0 ≤ shiftSum ((e : ℤ) + 3) D.q (n : ℤ) :=
+      shiftSum_nonneg _ D.q_nonneg _
+    have hN0 : 0 ≤ 2 * Nz (n : ℤ) := mul_nonneg (by norm_num) (Nz_nonneg _)
+    have heZ :
+        (finrank k (gradedDualPiece I e n) : ℤ) +
+            (shiftSum ((e : ℤ) + 3) D.p (n : ℤ)).toNat =
+          (2 * Nz (n : ℤ)).toNat +
+            (shiftSum ((e : ℤ) + 3) D.q (n : ℤ)).toNat := by
+      exact_mod_cast he
+    rw [Int.toNat_of_nonneg hp0, Int.toNat_of_nonneg hq0,
+      Int.toNat_of_nonneg hN0] at heZ
+    have hfin := finrank_gradedDualPiece I e n hne
+    have hlast : Nz ((n : ℤ) - ((e : ℤ) + 3)) = 0 :=
+      Nz_neg _ (by omega)
+    rw [← hnt, hlast]
+    linarith
+  · have hrev0 : reversedHilb I e t = 0 := by
+      rw [reversedHilb]
+      exact hA.hilb_vanish (by omega)
+    have hp0 : shiftSum ((e : ℤ) + 3) D.p t = 0 := by
+      apply shiftSum_vanish
+      intro b hb hbt
+      omega
+    have hq0 : shiftSum ((e : ℤ) + 3) D.q t = 0 := by
+      apply shiftSum_vanish
+      intro b hb hbt
+      omega
+    rw [hrev0, hp0, hq0, Nz_neg t (by omega),
+      Nz_neg (t - ((e : ℤ) + 3)) (by omega)]
+    ring
+
+/-- Properness of `I` forces every last-differential generator degree
+`e+3-qShift j` to be nonnegative.  Otherwise its certified degree is zero;
+full support makes it a nonzero constant, hence a unit in `I`. -/
+lemma qShift_le_of_proper (D : GradedResolutionDuality I e β₁ β₂)
+    (hI : I ≠ ⊤) (j : β₂) : D.qShift j ≤ (e : ℤ) + 3 := by
+  by_contra hshift
+  have hdegree : ((e : ℤ) + 3 - D.qShift j).toNat = 0 := by
+    rw [Int.toNat_eq_zero]
+    omega
+  have hhom : MvPolynomial.IsHomogeneous (D.idealGenerator j) 0 := by
+    simpa [hdegree] using D.idealGenerator_homogeneous j
+  have hgen0 : D.idealGenerator j ≠ 0 := by
+    intro hzero
+    have hfull := D.circuit_full j
+    rw [D.circuit_eq_generator j, hzero, map_zero] at hfull
+    exact hfull rfl
+  obtain ⟨c, hc⟩ : ∃ c : k, D.idealGenerator j = MvPolynomial.C c :=
+    ⟨(D.idealGenerator j).coeff 0,
+      MvPolynomial.totalDegree_eq_zero_iff_eq_C.mp
+        ((MvPolynomial.totalDegree_zero_iff_isHomogeneous _).mpr hhom)⟩
+  have hc0 : c ≠ 0 := by
+    intro hczero
+    apply hgen0
+    rw [hc, hczero, map_zero]
+  have hgenI : D.idealGenerator j ∈ I := by
+    have hle : Ideal.span (Set.range D.idealGenerator) ≤ I :=
+      le_of_eq D.ideal_eq_span_generators.symm
+    exact hle (Ideal.subset_span ⟨j, rfl⟩)
+  have hone : (1 : R3 k) ∈ I := by
+    have hmul := I.mul_mem_left (MvPolynomial.C c⁻¹) hgenI
+    rw [hc, ← map_mul, inv_mul_cancel₀ hc0, map_one] at hmul
+    exact hmul
+  exact hI ((Ideal.eq_top_iff_one I).mpr hone)
+
+/-- The coordinates of the last differential generate `I` in their
+certified homogeneous degrees.  Consequently `I` contains no nonzero
+homogeneous polynomial below all of those degrees.  This used to be a field
+of `GradedResolutionDuality`; it is derivable from its generator data. -/
+lemma ideal_no_low_degree (D : GradedResolutionDuality I e β₁ β₂) (n : ℕ)
+    (hI : I ≠ ⊤) (hn : ∀ j, (n : ℤ) < (e : ℤ) + 3 - D.qShift j) :
+    ∀ f ∈ I, MvPolynomial.IsHomogeneous f n → f = 0 := by
+  intro f hfI hhom
+  have hspan : Ideal.span (Set.range D.idealGenerator) ≤
+      MvPolynomial.idealOfVars (Fin 3) k ^ (n + 1) := by
+    rw [Ideal.span_le]
+    rintro g ⟨j, rfl⟩
+    apply isHomogeneous_mem_pow_idealOfVars (D.idealGenerator_homogeneous j)
+    have hnonneg : 0 ≤ (e : ℤ) + 3 - D.qShift j := by
+      have hq := D.qShift_le_of_proper hI j
+      omega
+    have hcast : (((e : ℤ) + 3 - D.qShift j).toNat : ℤ) =
+        (e : ℤ) + 3 - D.qShift j := Int.toNat_of_nonneg hnonneg
+    have hlt := hn j
+    have hle : (n : ℤ) + 1 ≤
+        (((e : ℤ) + 3 - D.qShift j).toNat : ℤ) := by
+      rw [hcast]
+      omega
+    exact_mod_cast hle
+  apply isHomogeneous_eq_zero_of_mem_succ_pow_idealOfVars hhom
+  apply hspan
+  rw [← D.ideal_eq_span_generators]
+  exact hfI
+
+/-- Indices of `F₁` with shift strictly below `d`. -/
+abbrev LowP (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :=
+  {i : β₁ // D.pShift i < d}
+
+/-- Indices of `F₂` with shift at most `d`. -/
+abbrev LowQ (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :=
+  {j : β₂ // D.qShift j ≤ d}
+
+/-- The localized low-shift part of `δ₂`. -/
+noncomputable def lowδ₂ (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :
+    (D.LowQ d → FractionRing (R3 k)) →ₗ[FractionRing (R3 k)]
+      (D.LowP d → FractionRing (R3 k)) :=
+  Fintype.linearCombination (FractionRing (R3 k))
+    (fun j i => D.δ₂K j.1 i.1)
+
+/-- The localized restriction of `δ₁` to rows of shift below `d`. -/
+noncomputable def lowδ₁ (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :
+    (D.LowP d → FractionRing (R3 k)) →ₗ[FractionRing (R3 k)]
+      (Fin 2 → FractionRing (R3 k)) :=
+  Fintype.linearCombination (FractionRing (R3 k))
+    (fun i z => algebraMap (R3 k) (FractionRing (R3 k)) (D.δ₁ i.1 z))
+
+/-- `ε_d` is no longer arbitrary: it is the nullity of the low part of
+the localized second differential. -/
+noncomputable def resolutionEpsilon
+    (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) : ℤ :=
+  (finrank (FractionRing (R3 k)) (LinearMap.ker (D.lowδ₂ d)) : ℤ)
+
+/-- `r_d` is no longer arbitrary: it is the rank of the localized first
+differential restricted to shifts below `d`. -/
+noncomputable def resolutionRank
+    (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) : ℤ :=
+  (finrank (FractionRing (R3 k)) (LinearMap.range (D.lowδ₁ d)) : ℤ)
+
+/-- The restricted localized maps still form a complex.  This is where the
+graded zero pattern is used: a column of shift at most `d` has zero entries
+in rows of shift at least `d`. -/
+lemma low_complex (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :
+    D.lowδ₁ d ∘ₗ D.lowδ₂ d = 0 := by
+  classical
+  apply LinearMap.ext
+  intro x
+  ext z
+  simp only [LinearMap.comp_apply, lowδ₁, lowδ₂,
+    Fintype.linearCombination_apply, Finset.sum_apply, Pi.smul_apply, smul_eq_mul,
+    LinearMap.zero_apply, Pi.zero_apply]
+  simp_rw [Finset.sum_mul]
+  rw [Finset.sum_comm]
+  apply Finset.sum_eq_zero
+  intro j _
+  simp_rw [mul_assoc]
+  rw [← Finset.mul_sum]
+  suffices hinner :
+      (∑ i : D.LowP d,
+          D.δ₂K j.1 i.1 *
+            algebraMap (R3 k) (FractionRing (R3 k)) (D.δ₁ i.1 z)) = 0 by
+    rw [hinner, mul_zero]
+  let term : β₁ → FractionRing (R3 k) := fun i =>
+    D.δ₂K j.1 i * algebraMap (R3 k) (FractionRing (R3 k)) (D.δ₁ i z)
+  have hhigh : (∑ i : {i : β₁ // ¬ D.pShift i < d}, term i.1) = 0 := by
+    apply Finset.sum_eq_zero
+    intro i _
+    unfold term
+    rw [D.δ₂_graded_zero j.1 i.1 (by omega), zero_mul]
+  have hsplit := Fintype.sum_subtype_add_sum_subtype
+    (fun i : β₁ => D.pShift i < d) term
+  have hfull : (∑ i : β₁, term i) = 0 := by
+    have hc := congrFun (D.δ₁δ₂ j.1) z
+    simpa [term, Pi.smul_apply, smul_eq_mul] using hc
+  have hlow : (∑ i : D.LowP d, term i.1) = 0 := by
+    rw [hhigh, add_zero] at hsplit
+    exact hsplit.trans hfull
+  exact hlow
+
+lemma q_cumulative (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :
+    (∑ b ∈ Finset.Icc (0 : ℤ) d, D.q b) =
+      (Fintype.card (D.LowQ d) : ℤ) := by
+  classical
+  rw [q, sum_shiftMultiplicity_Icc]
+  norm_cast
+  rw [Fintype.card_subtype]
+  congr 1
+  ext j
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · exact fun h => h.2
+  · exact fun h => ⟨D.qShift_nonneg j, h⟩
+
+lemma p_cumulative (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :
+    (∑ b ∈ Finset.Icc (0 : ℤ) (d - 1), D.p b) =
+      (Fintype.card (D.LowP d) : ℤ) := by
+  classical
+  rw [p, sum_shiftMultiplicity_Icc]
+  norm_cast
+  rw [Fintype.card_subtype]
+  congr 1
+  ext i
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · omega
+  · intro h
+    exact ⟨D.pShift_nonneg i, by omega⟩
+
+/-- A dependency among the projected low-shift columns extends by zero to
+a dependency among all columns.  The full-support circuit therefore still
+controls the restricted kernel. -/
+lemma lowδ₂_kernel_line (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ)
+    (x : D.LowQ d → FractionRing (R3 k))
+    (hx : x ∈ LinearMap.ker (D.lowδ₂ d)) :
+    ∃ a : FractionRing (R3 k),
+      x = a • (fun j : D.LowQ d => D.circuit j.1) := by
+  classical
+  let X : β₂ → FractionRing (R3 k) := fun j =>
+    if h : D.qShift j ≤ d then x ⟨j, h⟩ else 0
+  have hglobal : (∑ j, X j • D.δ₂K j) = 0 := by
+    funext i
+    simp only [Finset.sum_apply, Pi.smul_apply, smul_eq_mul, Pi.zero_apply]
+    by_cases hi : D.pShift i < d
+    · have hxi := congrFun (LinearMap.mem_ker.mp hx) ⟨i, hi⟩
+      simp only [lowδ₂, Fintype.linearCombination_apply, Finset.sum_apply,
+        Pi.smul_apply, smul_eq_mul, Pi.zero_apply] at hxi
+      let s : Finset β₂ := Finset.univ.filter fun j => D.qShift j ≤ d
+      calc
+        (∑ j : β₂, X j * D.δ₂K j i)
+            = ∑ j ∈ s, X j * D.δ₂K j i := by
+                symm
+                apply Finset.sum_subset (Finset.subset_univ s)
+                intro j _ hj
+                have hj' : ¬ D.qShift j ≤ d := by simpa [s] using hj
+                rw [show X j = 0 by simp [X, hj'], zero_mul]
+        _ = ∑ j : s, X j.1 * D.δ₂K j.1 i :=
+              (Finset.sum_coe_sort s fun j => X j * D.δ₂K j i).symm
+        _ = ∑ j : D.LowQ d, x j * D.δ₂K j.1 i := by
+              let equiv : s ≃ D.LowQ d :=
+                Equiv.subtypeEquivRight (by simp [s])
+              exact Fintype.sum_equiv equiv _ _ (fun j => by
+                have hjmem := j.2
+                change j.1 ∈ Finset.univ.filter (fun z => D.qShift z ≤ d) at hjmem
+                have hj : D.qShift j.1 ≤ d := (Finset.mem_filter.mp hjmem).2
+                have heq : equiv j = (⟨j.1, hj⟩ : D.LowQ d) := Subtype.ext rfl
+                rw [heq]
+                simp [X, hj])
+        _ = 0 := hxi
+    · apply Finset.sum_eq_zero
+      intro j _
+      unfold X
+      split
+      next hj =>
+        rw [D.δ₂_graded_zero j i (by omega), mul_zero]
+      next => rw [zero_mul]
+  obtain ⟨a, ha⟩ := D.kernel_line X hglobal
+  refine ⟨a, funext fun j => ?_⟩
+  have hj := congrFun ha j.1
+  simpa [X, j.2, Pi.smul_apply, smul_eq_mul] using hj
+
+/-- The full-support circuit proves `ε_d ≤ 1`. -/
+lemma resolutionEpsilon_le_one
+    (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :
+    finrank (FractionRing (R3 k)) (LinearMap.ker (D.lowδ₂ d)) ≤ 1 := by
+  let c : D.LowQ d → FractionRing (R3 k) := fun j => D.circuit j.1
+  have hle : LinearMap.ker (D.lowδ₂ d) ≤
+      Submodule.span (FractionRing (R3 k)) {c} := by
+    intro x hx
+    obtain ⟨a, ha⟩ := D.lowδ₂_kernel_line d x hx
+    rw [Submodule.mem_span_singleton]
+    exact ⟨a, ha.symm⟩
+  exact (Submodule.finrank_mono hle).trans (by
+    simpa using finrank_span_le_card (R := FractionRing (R3 k)) ({c} : Set _))
+
+/-- The rank data now have exactly the finite alternatives asserted in the
+paper: the target has dimension two, and the circuit kernel has dimension
+at most one. -/
+lemma rank_epsilon_cases (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :
+    (D.resolutionRank d = 0 ∨ D.resolutionRank d = 1 ∨
+      D.resolutionRank d = 2) ∧
+    (D.resolutionEpsilon d = 0 ∨ D.resolutionEpsilon d = 1) := by
+  have hrle : finrank (FractionRing (R3 k)) (LinearMap.range (D.lowδ₁ d)) ≤ 2 := by
+    calc
+      _ ≤ finrank (FractionRing (R3 k)) (Fin 2 → FractionRing (R3 k)) :=
+        Submodule.finrank_le _
+      _ = 2 := by
+        rw [Module.finrank_fintype_fun_eq_card, Fintype.card_fin]
+  have hεle := D.resolutionEpsilon_le_one d
+  unfold resolutionRank resolutionEpsilon
+  omega
+
+/-- Paper (3), with every term interpreted as the dimension/rank of its
+actual localized restricted map. -/
+lemma rank_inequality (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) :
+    (∑ b ∈ Finset.Icc (0 : ℤ) d, D.q b) - D.resolutionEpsilon d ≤
+      (∑ b ∈ Finset.Icc (0 : ℤ) (d - 1), D.p b) - D.resolutionRank d := by
+  have h := rank_estimate (D.lowδ₂ d) (D.lowδ₁ d) (D.low_complex d)
+    (ε := finrank (FractionRing (R3 k)) (LinearMap.ker (D.lowδ₂ d))) le_rfl
+  rw [Module.finrank_fintype_fun_eq_card, Module.finrank_fintype_fun_eq_card] at h
+  rw [D.q_cumulative d, D.p_cumulative d]
+  unfold resolutionEpsilon resolutionRank
+  omega
+
+/-- If one `F₂` column is omitted from the low-shift block, the restricted
+kernel is zero: extending a dependency by zero and evaluating the
+full-support circuit at the omitted coordinate kills its scalar. -/
+lemma lowδ₂_ker_eq_bot_of_omitted
+    (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ)
+    (j₀ : β₂) (hj₀ : ¬ D.qShift j₀ ≤ d) :
+    LinearMap.ker (D.lowδ₂ d) = ⊥ := by
+  classical
+  rw [Submodule.eq_bot_iff]
+  intro x hx
+  let X : β₂ → FractionRing (R3 k) := fun j =>
+    if h : D.qShift j ≤ d then x ⟨j, h⟩ else 0
+  have hglobal : (∑ j, X j • D.δ₂K j) = 0 := by
+    funext i
+    simp only [Finset.sum_apply, Pi.smul_apply, smul_eq_mul, Pi.zero_apply]
+    by_cases hi : D.pShift i < d
+    · have hxi := congrFun (LinearMap.mem_ker.mp hx) ⟨i, hi⟩
+      simp only [lowδ₂, Fintype.linearCombination_apply, Finset.sum_apply,
+        Pi.smul_apply, smul_eq_mul, Pi.zero_apply] at hxi
+      let s : Finset β₂ := Finset.univ.filter fun j => D.qShift j ≤ d
+      calc
+        (∑ j : β₂, X j * D.δ₂K j i)
+            = ∑ j ∈ s, X j * D.δ₂K j i := by
+                symm
+                apply Finset.sum_subset (Finset.subset_univ s)
+                intro j _ hj
+                have hj' : ¬ D.qShift j ≤ d := by simpa [s] using hj
+                rw [show X j = 0 by simp [X, hj'], zero_mul]
+        _ = ∑ j : s, X j.1 * D.δ₂K j.1 i :=
+              (Finset.sum_coe_sort s fun j => X j * D.δ₂K j i).symm
+        _ = ∑ j : D.LowQ d, x j * D.δ₂K j.1 i := by
+              let equiv : s ≃ D.LowQ d :=
+                Equiv.subtypeEquivRight (by simp [s])
+              exact Fintype.sum_equiv equiv _ _ (fun j => by
+                have hjmem := j.2
+                change j.1 ∈ Finset.univ.filter (fun z => D.qShift z ≤ d) at hjmem
+                have hj : D.qShift j.1 ≤ d := (Finset.mem_filter.mp hjmem).2
+                have heq : equiv j = (⟨j.1, hj⟩ : D.LowQ d) := Subtype.ext rfl
+                rw [heq]
+                simp [X, hj])
+        _ = 0 := hxi
+    · apply Finset.sum_eq_zero
+      intro j _
+      unfold X
+      split
+      next hj => rw [D.δ₂_graded_zero j i (by omega), mul_zero]
+      next => rw [zero_mul]
+  obtain ⟨a, ha⟩ := D.kernel_line X hglobal
+  have ha0 : a = 0 := by
+    have hj := congrFun ha j₀
+    have hX0 : X j₀ = 0 := by simp [X, hj₀]
+    rw [hX0] at hj
+    simp only [Pi.smul_apply, smul_eq_mul] at hj
+    exact (mul_eq_zero.mp hj.symm).resolve_right (D.circuit_full j₀)
+  funext j
+  have hj := congrFun ha j.1
+  simpa [X, j.2, ha0, Pi.smul_apply, smul_eq_mul] using hj
+
+/-- `ε_d = 1` forces every `F₂` shift to be at most `d`. -/
+lemma all_qShift_le_of_epsilon_one
+    (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ)
+    (hε : D.resolutionEpsilon d = 1) : ∀ j, D.qShift j ≤ d := by
+  intro j
+  by_contra hj
+  have hker := D.lowδ₂_ker_eq_bot_of_omitted d j hj
+  have hfin : finrank (FractionRing (R3 k)) (LinearMap.ker (D.lowδ₂ d)) = 0 := by
+    rw [hker, finrank_bot]
+  unfold resolutionEpsilon at hε
+  omega
+
+/-- The paper's `ε_d = 1` binomial window, now derived from the shifts of
+the last differential and the fact that its coordinates generate `I`. -/
+lemma epsilon_one_full_hilbert
+    (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ)
+    (hI : I ≠ ⊤)
+    (hε : D.resolutionEpsilon d = 1) :
+    ∀ t, t < (e : ℤ) + 3 - d → hilb I t = Nz t := by
+  have hall := D.all_qShift_le_of_epsilon_one d hε
+  intro t ht
+  by_cases ht0 : 0 ≤ t
+  · have hdisj : ∀ f ∈ I,
+        MvPolynomial.IsHomogeneous f t.toNat → f = 0 := by
+      apply D.ideal_no_low_degree t.toNat hI
+      intro j
+      have htn : (t.toNat : ℤ) = t := Int.toNat_of_nonneg ht0
+      have hj := hall j
+      rw [htn]
+      omega
+    have hdim := finrank_quotPiece_eq I t.toNat hdisj
+    rw [hilb, if_pos ht0, Nz, if_pos ht0, hdim, N]
+  · rw [hilb_neg I (by omega), Nz_neg t (by omega)]
+
+/-- A rank-zero restricted first differential has no low-shift basis
+vectors, because minimality makes every column nonzero. -/
+lemma rank_zero_no_low_shifts
+    (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ)
+    (hr : D.resolutionRank d = 0) :
+    ∑ b ∈ Finset.Icc (0 : ℤ) (d - 1), D.p b = 0 := by
+  classical
+  have hr0 : finrank (FractionRing (R3 k))
+      (LinearMap.range (D.lowδ₁ d)) = 0 := by
+    unfold resolutionRank at hr
+    omega
+  have hrange : LinearMap.range (D.lowδ₁ d) = ⊥ :=
+    Submodule.finrank_eq_zero.mp hr0
+  have hempty : IsEmpty (D.LowP d) := by
+    refine ⟨fun i => ?_⟩
+    have hcol : (fun z =>
+        algebraMap (R3 k) (FractionRing (R3 k)) (D.δ₁ i.1 z)) = 0 := by
+      have hmem : D.lowδ₁ d (Pi.single i 1) ∈ LinearMap.range (D.lowδ₁ d) :=
+        ⟨Pi.single i 1, rfl⟩
+      rw [hrange] at hmem
+      have hz : D.lowδ₁ d (Pi.single i 1) = 0 := by simpa using hmem
+      simpa [lowδ₁, Fintype.linearCombination_apply_single] using hz
+    apply D.δ₁_ne_zero i.1
+    funext z
+    apply IsFractionRing.injective (R3 k) (FractionRing (R3 k))
+    simpa using congrFun hcol z
+  rw [D.p_cumulative d]
+  norm_cast
+  exact Fintype.card_eq_zero
+
+/-- The quotient by the unit ideal has the zero Hilbert function (the
+`H = 0` alternative in the manuscript). -/
+lemma hilb_top_ideal (t : ℤ) : hilb (⊤ : Ideal (R3 k)) t = 0 := by
+  rw [hilb]
+  split
+  next ht =>
+    have hpiece : quotPiece (⊤ : Ideal (R3 k)) t.toNat = ⊥ := by
+      rw [Submodule.eq_bot_iff]
+      intro x _
+      exact Subsingleton.elim x 0
+    rw [hpiece, finrank_bot]
+    norm_num
+  next => rfl
+
+/-- The graded algebra data proving that an annihilator quotient is an
+actual codimension-at-most-three Artinian Gorenstein quotient. -/
+structure GorensteinAnnihilatorData (Ann : Ideal (R3 k)) (E : ℕ) : Prop where
+  homogeneous : Ann.IsHomogeneous (homogeneousSubmodule (Fin 3) k)
+  proper : Ann ≠ ⊤
+  finiteDimensional : FiniteDimensional k (R3 k ⧸ Ann)
+  vanish_above : ∀ n : ℕ, E < n → quotPiece Ann n = ⊥
+  socle_concentrated : socle Ann ≤ quotPiece Ann E
+  socle_one : finrank k (socle Ann) = 1
+
+lemma GorensteinAnnihilatorData.toGorensteinQuotientHF
+    {Ann : Ideal (R3 k)} {E : ℕ} (h : GorensteinAnnihilatorData Ann E) :
+    GorensteinQuotientHF k (hilb Ann) (E : ℤ) := by
+  exact ⟨Ann, E, rfl, h.homogeneous, h.proper, h.finiteDimensional,
+    h.vanish_above, h.socle_concentrated, h.socle_one, fun _ => rfl⟩
+
+/-- The graded output of the primitive-vector argument in the critical
+rank-one branch.  Unlike the old `hr1`, this contains the actual primitive
+homogeneous vector, coefficient ideal `J`, annihilator ideal, equality of
+their low-degree pieces (equation (7) plus cancellation by `v`), and the
+degreewise kernel dimension.  Equation (8) is *not* a field; it is derived
+below by rank-nullity for `Ann ⊂ R`.
+
+The alternative `Ann = ⊤` is exactly `H = 0`.  Otherwise the second branch
+records the graded bookkeeping obtained from the cyclic-simple-socle
+theorem, making `R/Ann` an actual Gorenstein quotient of socle degree
+`e-a`. -/
+structure CriticalBranchCertificate
+    (D : GradedResolutionDuality I e β₁ β₂) (d : ℤ) where
+  two_le_d : 2 ≤ d
+  d_le_e : d ≤ (e : ℤ)
+  a : ℕ
+  a_lt_d : (a : ℤ) < d
+  v : Fin 2 → R3 k
+  v_primitive : IsRelPrime (v 0) (v 1)
+  v_homogeneous : ∀ z, MvPolynomial.IsHomogeneous (v z) a
+  J : Ideal (R3 k)
+  J_homogeneous : J.IsHomogeneous (homogeneousSubmodule (Fin 3) k)
+  Ann : Ideal (R3 k)
+  low_mem_iff : ∀ n : ℕ, (n : ℤ) ≤ d - (a : ℤ) →
+    ∀ f : R3 k, MvPolynomial.IsHomogeneous f n → (f ∈ J ↔ f ∈ Ann)
+  kernelPiece : ℤ → Submodule k (Fin 2 → R3 k)
+  equation7 : ∀ t : ℤ, t ≤ d → kernelPiece t = vJPiece J v a t
+  presentation_exact : ∀ t : ℤ, d - 2 ≤ t → t ≤ d → Nonempty
+    (SurjectivePresentation k (gradedDualPiece I e t.toNat) (kernelPiece t)
+      (2 * Nz t).toNat)
+  annihilator_case : Ann = ⊤ ∨ GorensteinAnnihilatorData Ann (e - a)
+
+namespace CriticalBranchCertificate
+
+variable {D : GradedResolutionDuality I e β₁ β₂} {d : ℤ}
+
+lemma a_le_e (C : CriticalBranchCertificate D d) : C.a ≤ e := by
+  have : (C.a : ℤ) ≤ (e : ℤ) := by
+    have ha := C.a_lt_d
+    have hde := C.d_le_e
+    omega
+  exact_mod_cast this
+
+lemma v_ne_zero (C : CriticalBranchCertificate D d) : C.v ≠ 0 := by
+  intro hv
+  rcases C.v_primitive.ne_zero_or_ne_zero with h0 | h1
+  · exact h0 (congrFun hv 0)
+  · exact h1 (congrFun hv 1)
+
+/-- The low-degree ideal-piece equality, derived from the homogeneous
+membership equivalence supplied by the truncated exactness argument. -/
+lemma low_piece_eq (C : CriticalBranchCertificate D d) (n : ℕ)
+    (hn : (n : ℤ) ≤ d - (C.a : ℤ)) :
+    idealPiece C.J n = idealPiece C.Ann n :=
+  idealPiece_eq_of_homogeneous_mem_iff C.J C.Ann n (C.low_mem_iff n hn)
+
+/-- The presentation-dimension formula used in equation (7), derived from
+the actual surjective presentation and its certified kernel. -/
+lemma presentation_dimension (C : CriticalBranchCertificate D d) :
+    ∀ t : ℤ, d - 2 ≤ t → t ≤ d →
+      reversedHilb I e t = 2 * Nz t - (finrank k (C.kernelPiece t) : ℤ) := by
+  intro t hdt htd
+  have ht0 : 0 ≤ t := by
+    have hd := C.two_le_d
+    omega
+  have hte : t.toNat ≤ e := by
+    have htcast : (t.toNat : ℤ) = t := Int.toNat_of_nonneg ht0
+    have : (t.toNat : ℤ) ≤ (e : ℤ) := by
+      have hde := C.d_le_e
+      omega
+    exact_mod_cast this
+  obtain P := (C.presentation_exact t hdt htd).some
+  have h := P.finrank_add
+  have hnonneg : 0 ≤ 2 * Nz t := mul_nonneg (by norm_num) (Nz_nonneg _)
+  have hZ :
+      (finrank k (gradedDualPiece I e t.toNat) : ℤ) +
+          (finrank k (C.kernelPiece t) : ℤ) =
+        ((2 * Nz t).toNat : ℤ) := by
+    exact_mod_cast h
+  rw [Int.toNat_of_nonneg hnonneg] at hZ
+  have hfin := finrank_gradedDualPiece I e t.toNat hte
+  have htcast : (t.toNat : ℤ) = t := Int.toNat_of_nonneg ht0
+  rw [htcast] at hfin
+  linarith
+
+lemma idealHilb_eq_annihilator
+    (C : CriticalBranchCertificate D d) {z : ℤ}
+    (hz : z ≤ d - (C.a : ℤ)) : idealHilb C.J z = idealHilb C.Ann z := by
+  by_cases hz0 : 0 ≤ z
+  · rw [idealHilb, if_pos hz0, idealHilb, if_pos hz0,
+      C.low_piece_eq z.toNat (by rw [Int.toNat_of_nonneg hz0]; exact hz)]
+  · rw [idealHilb, if_neg hz0, idealHilb, if_neg hz0]
+
+/-- The dimension form of equation (7), obtained from the actual equality
+of graded kernel and `vJ` pieces. -/
+lemma kernel_dimension (C : CriticalBranchCertificate D d) :
+    ∀ t : ℤ, d - 2 ≤ t → t ≤ d →
+      reversedHilb I e t = 2 * Nz t - idealHilb C.J (t - (C.a : ℤ)) := by
+  intro t hdt htd
+  have h := C.presentation_dimension t hdt htd
+  rw [C.equation7 t htd, finrank_vJPiece C.J C.v_ne_zero C.a t] at h
+  exact h
+
+/-- Equation (8), obtained from the actual ideals. -/
+lemma equation8 (C : CriticalBranchCertificate D d) :
+    ∀ t : ℤ, d - 2 ≤ t → t ≤ d →
+      reversedHilb I e t = 2 * Nz t - Nz (t - (C.a : ℤ)) +
+        hilb C.Ann (t - (C.a : ℤ)) := by
+  intro t hdt htd
+  have hker := C.kernel_dimension t hdt htd
+  have heq := C.idealHilb_eq_annihilator (z := t - (C.a : ℤ)) (by omega)
+  have hdim := idealHilb_add_hilb C.Ann (t - (C.a : ℤ))
+  linarith
+
+/-- The old critical numerical hypothesis `hr1`, derived from the graded
+primitive/annihilator certificate. -/
+lemma to_hr1 (C : CriticalBranchCertificate D d) :
+    ∃ (a : ℤ) (B : ℤ → ℤ), 0 ≤ a ∧ a < d ∧
+      ((∀ t, B t = 0) ∨ GorensteinQuotientHF k B ((e : ℤ) - a)) ∧
+      (∀ t, d - 2 ≤ t → t ≤ d →
+        reversedHilb I e t = 2 * Nz t - Nz (t - a) + B (t - a)) := by
+  refine ⟨(C.a : ℤ), hilb C.Ann, Int.natCast_nonneg _, C.a_lt_d, ?_, ?_⟩
+  · rcases C.annihilator_case with htop | hgor
+    · left
+      intro t
+      rw [htop]
+      exact hilb_top_ideal t
+    · right
+      have hg := hgor.toGorensteinQuotientHF
+      simpa [Nat.cast_sub C.a_le_e] using hg
+  · exact C.equation8
+
+end CriticalBranchCertificate
+
+/-- A single completion object over the unavailable resolution/duality
+certificate.  Its critical-branch method returns the graded construction
+above only in the branch where the paper needs it. -/
+structure ResolutionPackage
+    (D : GradedResolutionDuality I e β₁ β₂) : Prop where
+  critical : ∀ d : ℤ, 2 ≤ d → d ≤ (e : ℤ) →
+    D.resolutionRank d = 1 → D.p d = 0 →
+    reversedHilb I e d - 2 * reversedHilb I e (d - 1) +
+      reversedHilb I e (d - 2) = 1 →
+    Nonempty (CriticalBranchCertificate D d)
+
+end GradedResolutionDuality
+
+end ResolutionBridge
+
+/-- The exact remaining resolution-theoretic existence proposition, with
+finite bases normalized to `Fin` types.  A complete formalization modulo
+Stanley would prove
+
+`IsTypeTwoLevel I e → HasGradedResolutionPackage I e`.
+
+Naming the boundary prevents the structural construction from being
+confused with any of the numerical hypotheses already discharged. -/
+def HasGradedResolutionPackage (I : Ideal (R3 k)) (e : ℕ) : Prop :=
+  ∃ (n₁ n₂ : ℕ) (D : GradedResolutionDuality I e (Fin n₁) (Fin n₂)),
+    D.ResolutionPackage
+
+/-- **End-to-end theorem modulo the resolution/duality existence theorem and
+Stanley.**  Starting from the actual type-two level algebra, a single
+`GradedResolutionDuality`/`ResolutionPackage` pair constructs every former
+hypothesis of `theorem1_full`: `hrev`, `hres`, the Betti nonnegativity,
+`hrε`, (3), both shift-specific consequences, the primitive/annihilator
+branch, equation (8), and the Gorenstein bounds.  The only published result
+left as a hypothesis is Stanley's monotonicity theorem.
+
+The existence of `D` is precisely the block which cannot currently be
+derived inside Mathlib because minimal graded free resolutions and graded
+Matlis duality are absent. -/
+theorem theorem1_of_resolution
+    (e : ℕ) (I : Ideal (R3 k)) (hA : IsTypeTwoLevel I e)
+    {β₁ β₂ : Type*} [Fintype β₁] [Fintype β₂]
+    (D : GradedResolutionDuality I e β₁ β₂)
+    (P : D.ResolutionPackage)
+    (hStanley : ∀ B E, GorensteinQuotientHF k B E →
+      ∀ i j : ℤ, 0 ≤ j → j ≤ i → 2 * i ≤ E → B j ≤ B i) :
+    ∀ i : ℤ, 1 ≤ i → i ≤ (e : ℤ) - 1 →
+      hilb I (i - 1) * hilb I (i + 1) ≤ hilb I i ^ 2 := by
+  apply theorem1_full (e : ℤ) (hilb I) (reversedHilb I e) D.p D.q
+    D.resolutionRank D.resolutionEpsilon (GorensteinQuotientHF k)
+    (hilb_nonneg I) (hilb_le_Nz I) (fun _ => rfl) D.p_nonneg D.q_nonneg
+    (D.hilbert_series hA)
+  · intro d _ _
+    exact D.rank_epsilon_cases d
+  · intro d _ _
+    exact D.rank_inequality d
+  · intro d _ _ hε
+    exact D.epsilon_one_full_hilbert d hA.proper hε
+  · intro d _ _ hr
+    exact D.rank_zero_no_low_shifts d hr
+  · intro d hd hde hr hp hΔ
+    exact (P.critical d hd hde hr hp hΔ).some.to_hr1
+  · intro B E hB
+    exact hB.bounds
+  · exact hStanley
+
+/-- The end-to-end result with the entire non-Stanley boundary bundled as
+the single named existence proposition `HasGradedResolutionPackage`. -/
+theorem theorem1_of_hasGradedResolutionPackage
+    (e : ℕ) (I : Ideal (R3 k)) (hA : IsTypeTwoLevel I e)
+    (hResolution : HasGradedResolutionPackage I e)
+    (hStanley : ∀ B E, GorensteinQuotientHF k B E →
+      ∀ i j : ℤ, 0 ≤ j → j ≤ i → 2 * i ≤ E → B j ≤ B i) :
+    ∀ i : ℤ, 1 ≤ i → i ≤ (e : ℤ) - 1 →
+      hilb I (i - 1) * hilb I (i + 1) ≤ hilb I i ^ 2 := by
+  obtain ⟨n₁, n₂, D, P⟩ := hResolution
+  exact theorem1_of_resolution e I hA D P hStanley
+
+set_option linter.unusedVariables false in
+/-- **Theorem 1 from the formal algebra.**  Log-concavity of the Hilbert
+function of a formally defined codimension-three, type-two level algebra
+`A = R/I` (`hA : IsTypeTwoLevel I e`).
+
+Compared with `theorem1_full`, the hypotheses `hnn`, `hquot`, and `hGor`
+are *derived* from the formal algebra (`hilb_nonneg`, `hilb_le_Nz`,
+`GorensteinQuotientHF.bounds`), and the abstract predicate `Gor` is
+instantiated at the concrete `GorensteinQuotientHF`.  The remaining
+hypotheses — `hrev`/`hres` (graded Matlis duality and the dual minimal
+resolution, roadmap items 2–3), `hrε`/`h3` (the rank data over `Frac R`,
+item 4), `hε1`/`hr0` (the shift-specific consequences, item 5), `hr1`
+(the primitive-vector/cyclic-Gorenstein construction and equation (8),
+items 6–10) — are now propositions about the concrete Hilbert function
+`hilb I` of `A`, i.e. precisely specified open lemmas; `hStanley` is
+Stanley's theorem (item 12), the sole imported published result.
+
+The structural hypothesis `hA` is not yet consumed by the numerical
+skeleton below; it anchors the statement and is the input from which
+items 2–10 will discharge the remaining hypotheses. -/
+theorem theorem1_of_level
+    (e : ℕ) (I : Ideal (R3 k)) (hA : IsTypeTwoLevel I e)
+    (g p q r ε : ℤ → ℤ)
+    (hrev : ∀ t, g t = hilb I ((e : ℤ) - t))
+    (hp0 : ∀ b, 0 ≤ p b) (hq0 : ∀ b, 0 ≤ q b)
+    (hres : ∀ t, t ≤ (e : ℤ) →
+      g t = 2 * Nz t - shiftSum ((e : ℤ) + 3) p t + shiftSum ((e : ℤ) + 3) q t
+              - Nz (t - ((e : ℤ) + 3)))
+    (hrε : ∀ d, 2 ≤ d → d ≤ (e : ℤ) →
+      (r d = 0 ∨ r d = 1 ∨ r d = 2) ∧ (ε d = 0 ∨ ε d = 1))
+    (h3 : ∀ d, 2 ≤ d → d ≤ (e : ℤ) →
+      (∑ b ∈ Finset.Icc (0 : ℤ) d, q b) - ε d
+        ≤ (∑ b ∈ Finset.Icc (0 : ℤ) (d - 1), p b) - r d)
+    (hε1 : ∀ d, 2 ≤ d → d ≤ (e : ℤ) → ε d = 1 →
+      ∀ t, t < (e : ℤ) + 3 - d → hilb I t = Nz t)
+    (hr0 : ∀ d, 2 ≤ d → d ≤ (e : ℤ) → r d = 0 →
+      ∑ b ∈ Finset.Icc (0 : ℤ) (d - 1), p b = 0)
+    (hr1 : ∀ d, 2 ≤ d → d ≤ (e : ℤ) → r d = 1 → p d = 0 →
+      g d - 2 * g (d - 1) + g (d - 2) = 1 →
+      ∃ (a : ℤ) (B : ℤ → ℤ), 0 ≤ a ∧ a < d ∧
+        ((∀ t, B t = 0) ∨ GorensteinQuotientHF k B ((e : ℤ) - a)) ∧
+        (∀ t, d - 2 ≤ t → t ≤ d → g t = 2 * Nz t - Nz (t - a) + B (t - a)))
+    (hStanley : ∀ B E, GorensteinQuotientHF k B E →
+      ∀ i j : ℤ, 0 ≤ j → j ≤ i → 2 * i ≤ E → B j ≤ B i) :
+    ∀ i : ℤ, 1 ≤ i → i ≤ (e : ℤ) - 1 →
+      hilb I (i - 1) * hilb I (i + 1) ≤ hilb I i ^ 2 :=
+  theorem1_full (e : ℤ) (hilb I) g p q r ε (GorensteinQuotientHF k)
+    (hilb_nonneg I) (hilb_le_Nz I) hrev hp0 hq0 hres hrε h3 hε1 hr0 hr1
+    (fun B E hg => hg.bounds) hStanley
+
+end FormalAlgebra
+
 /-! ## Numerical consistency witness
 
 A theorem from hypotheses is only meaningful if the hypotheses are mutually
@@ -1046,5 +2504,24 @@ Only Lean's standard foundational axioms (`propext`, `Classical.choice`,
 #print axioms primitive_line_saturated_fraction
 #print axioms line_factorization
 #print axioms cyclic_submodule_simple_socle
+#print axioms finrank_homogeneousSubmodule
+#print axioms hilb_le_Nz
+#print axioms hilb_zero
+#print axioms IsTypeTwoLevel.hilb_one
+#print axioms IsTypeTwoLevel.hilb_top
+#print axioms IsTypeTwoLevel.hilb_vanish
+#print axioms IsTypeTwoLevel.two_le_socleDegree
+#print axioms GorensteinQuotientHF.bounds
+#print axioms theorem1_of_level
+#print axioms finrank_gradedDualPiece
+#print axioms GradedResolutionDuality.low_complex
+#print axioms GradedResolutionDuality.rank_inequality
+#print axioms GradedResolutionDuality.hilbert_series
+#print axioms GradedResolutionDuality.ideal_no_low_degree
+#print axioms line_coefficient_eq_annihilator_low
+#print axioms idealPiece_finrank_add_quotPiece
+#print axioms ExactPresentation.finrank_add
+#print axioms SurjectivePresentation.finrank_add
+#print axioms theorem1_of_resolution
 
 end LogConcavity

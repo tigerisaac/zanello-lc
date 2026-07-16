@@ -44,7 +44,7 @@ jobs:
           # beyond Lean's three standard foundational axioms
           count=$(grep -c "depends on axioms" build.log)
           echo "audited declarations: $count"
-          test "$count" -ge 13
+          test "$count" -ge 21
           if grep "depends on axioms" build.log \
               | grep -v "\[propext, Classical.choice, Quot.sound\]"; then
             echo "::error::unexpected axioms detected"

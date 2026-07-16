@@ -7,9 +7,8 @@ A Lean 4 + Mathlib formalization of the proof of:
 > and type two. Then its Hilbert function is log-concave:
 > `hᵢ² ≥ h_{i-1} h_{i+1}` for `1 ≤ i ≤ e−1`.
 
-All Lean code is in [`LogConcavity.lean`](LogConcavity.lean). The build is
-fully self-contained in this folder: toolchain in `.elan/`, dependencies in
-`.lake/`.
+All Lean code is in [`LogConcavity.lean`](LogConcavity.lean). Dependencies
+are pinned by `lean-toolchain` and `lake-manifest.json`.
 
 ## Verification status
 
@@ -50,33 +49,73 @@ behind the imported hypotheses, in the exact form the paper uses it:
 | Passage from the low-shift image to `vJ`; truncated-kernel identity (7), `cv ∈ (vJ) ⟺ c ∈ J` | `line_factorization` |
 | Nonzero cyclic submodule of a finite-length module with simple socle ⇒ Artinian quotient with simple socle | `cyclic_submodule_simple_socle` |
 
-## What is assumed (the trust base), and exactly why
+## The formal algebraic input and resolution bridge
 
-Mathlib currently has **no graded Matlis duality, no minimal graded free
-resolutions, and no Stanley theorem** for codimension-3 Gorenstein h-vectors;
-formalizing them is a multi-month research project. The corresponding
-*structural* facts enter as the named hypotheses of `theorem1_full`, each
-annotated with its source in the paper:
+The **formal-algebra layer** defines the paper's actual starting object in
+Lean: `R = k[x₁,x₂,x₃]` with its monomial grading, a homogeneous ideal `I`,
+the graded quotient `A = R/I` with graded pieces `quotPiece I n` (images of
+`Rₙ`), its Hilbert function `hilb I : ℤ → ℤ`, its socle, and the predicate
+`IsTypeTwoLevel I e` — Artinian, embedding dimension three, socle
+concentrated in degree `e`, type two. Machine-checked from that object:
 
-- `hrev` — `g_d = h_{e−d}` (graded Matlis duality, p. 1);
-- `hquot` — `h_t ≤ N_t` (`A` is a quotient of `R`);
-- `hres` — rank additivity of the exact complex (1);
-- `hrε`, `h3` — the rank data `r_d ∈ {0,1,2}`, `ε_d ∈ {0,1}` and estimate (3);
-- `hε1` — `ε_d = 1` ⇒ `h_t = N_t` below degree `s−d` (dual degree correspondence);
-- `hr0` — `r_d = 0` ⇒ no relations of shift `< d` (`P_{<d} = 0`);
-- `hr1` — in the putative-failure case, equation (8) with `B` either zero
-  (the paper's `H = 0` case) or a Gorenstein Hilbert function `Gor B (e−a)` —
-  the UFD/cyclic-submodule argument of pp. 3–4 (whose abstract algebraic
-  content is machine-checked in the structural layer);
-- `hGor` — a Gorenstein Hilbert function is supported on `[0, ∞)` and
-  bounded by the Hilbert function of `R`;
-- `hStanley` — **Stanley's theorem (Lemma 1, Zanello's characteristic-free
-  version), the sole major imported structural theorem**, stated as its own
-  named hypothesis over the abstract predicate `Gor` rather than packaged
-  into `hr1`.
+| Statement | Lean theorem |
+|---|---|
+| `dim_k Rₙ = binom(n+2,2) = N n` (monomial basis, stars and bars) | `finrank_homogeneousSubmodule` |
+| `h_t ≥ 0` and `h_t ≤ N_t` — hypotheses `hnn`, `hquot` **derived** | `hilb_nonneg`, `hilb_le_Nz` |
+| Profile of the paper: `h₀ = 1`, `h₁ = 3`, `h_e = 2`, `h_t = 0` for `t > e` (socle = top piece), hence `2 ≤ e` | `hilb_zero`, `IsTypeTwoLevel.hilb_one`, `IsTypeTwoLevel.hilb_top`, `IsTypeTwoLevel.hilb_vanish`, `IsTypeTwoLevel.socle_eq`, `IsTypeTwoLevel.two_le_socleDegree` |
+| Gorenstein bounds — hypothesis `hGor` **derived** over the *concrete* predicate `GorensteinQuotientHF` (graded Artinian quotient of `R` with one-dimensional socle in degree `E`) | `GorensteinQuotientHF.bounds` |
 
-The formal result: **given these structural inputs, log-concavity follows,
-with the entire quantitative argument of the paper kernel-checked.**
+The new resolution bridge replaces the old arbitrary functions `g,p,q,r,ε`
+by proof-carrying algebraic data:
+
+| Checklist step | Lean object / theorem |
+|---|---|
+| finite Betti bases and genuine shift multiplicities | `GradedResolutionDuality`, `shiftMultiplicity`, `sum_shiftMultiplicity_Icc` |
+| the pieces `M_d = Hom_k(A_{e-d},k)` and `g_d=h_{e-d}` | `gradedDualPiece`, `reversedHilb`, `finrank_gradedDualPiece` |
+| Hilbert-series coefficients from actual degreewise exact maps (not a numerical field) | `ExactPresentation.finrank_add`, `GradedResolutionDuality.hilbert_series` |
+| localized low-shift matrices form a complex | `lowδ₂`, `lowδ₁`, `low_complex` |
+| `ε_d` and `r_d` are actual nullity/rank; `(3)` follows | `resolutionEpsilon`, `resolutionRank`, `rank_epsilon_cases`, `rank_inequality` |
+| properness gives the upper shift bound; homogeneous generators give no lower-degree ideal elements | `qShift_le_of_proper`, `ideal_no_low_degree` |
+| `ε_d=1` gives the full binomial window | `all_qShift_le_of_epsilon_one`, `epsilon_one_full_hilbert` |
+| `r_d=0` gives `P_{<d}=0` | `rank_zero_no_low_shifts` |
+| primitive line, coefficient ideal, and low annihilator chain | `CriticalBranchCertificate`, `line_coefficient_eq_annihilator_low` |
+| critical presentation dimension from a surjective map and its actual kernel | `SurjectivePresentation.finrank_add`, `CriticalBranchCertificate.presentation_dimension` |
+| actual Gorenstein annihilator quotient | `GorensteinAnnihilatorData.toGorensteinQuotientHF` |
+| degreewise ideal/quotient dimension split and equation (8) | `idealPiece_finrank_add_quotPiece`, `idealHilb_add_hilb`, `CriticalBranchCertificate.equation8` |
+
+`theorem1_of_resolution` feeds all of these derived facts into
+`theorem1_full`. Its user-visible mathematical inputs are the actual level
+algebra, a certified `GradedResolutionDuality`/`ResolutionPackage` pair,
+and Stanley's theorem. It no longer asks separately for `hrev`, `hres`, `hrε`, `h3`,
+`hε1`, `hr0`, `hr1`, or `hGor`.
+`theorem1_of_hasGradedResolutionPackage` bundles the whole non-Stanley input
+as the single named proposition `HasGradedResolutionPackage I e`.
+
+## Remaining trust boundary
+
+Mathlib 4.31 has a generic functorial projective-resolution API, but no
+minimal **graded** free resolutions, Hilbert-syzygy bridge, or graded
+Matlis-duality theory. Consequently the repository still cannot
+prove the *existence* of `GradedResolutionDuality`/`ResolutionPackage` from
+`IsTypeTwoLevel I e`. In exact Lean terms, the missing theorem is
+`IsTypeTwoLevel I e → HasGradedResolutionPackage I e`. The package is deliberately proof-carrying: it
+contains finite bases and shifts, localized matrices, the last
+differential's full-support generator vector, degreewise exact linear maps,
+and the graded critical-branch construction. Once such a
+package is supplied, all former numerical assumptions are theorems listed
+above. In particular, the package now carries exact linear maps rather than
+the Hilbert-series and critical presentation dimension equalities; both
+equalities are kernel-checked consequences of rank–nullity.
+
+Stanley's monotonicity theorem is the other explicit input. Thus the new
+result is end-to-end **conditional on the missing resolution/duality
+existence theorem and Stanley**, not yet a theorem modulo Stanley alone.
+This distinction is reflected directly in the signature of
+`theorem1_of_resolution`; no `sorry`, custom axiom, or opaque numerical
+hypothesis hides it.
+
+The legacy `theorem1_full` and `theorem1_of_level` are retained for
+compatibility and for the numerical consistency witness.
 
 ## Numerical consistency witness
 
@@ -93,14 +132,15 @@ is jointly satisfiable, no more.)
 
 ## Reproducing
 
-```powershell
-$env:ELAN_HOME = "$PWD\.elan"
-$env:PATH = "$env:ELAN_HOME\bin;$env:PATH"
-lake build   # expect: Build completed successfully + axiom audit lines
+With [elan](https://github.com/leanprover/elan) installed:
+
+```sh
+lake exe cache get   # fetch the prebuilt Mathlib binary cache
+lake build           # expect: Build completed successfully + axiom audit lines
 ```
 
-Setup: elan 4.2.3 (local), Lean `v4.31.0`, Mathlib `v4.31.0` with prebuilt
-cache (`lake exe cache get`).
+Setup: Lean `v4.31.0`, Mathlib `v4.31.0` (pinned in `lean-toolchain` /
+`lake-manifest.json`).
 
 ## Continuous integration
 
