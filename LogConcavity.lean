@@ -1579,6 +1579,8 @@ structure GradedResolutionDuality
       (2 * Nz (n : ℤ)).toNat)
   δ₁ : β₁ → Fin 2 → R3 k
   δ₁_ne_zero : ∀ i, δ₁ i ≠ 0
+  δ₁_homogeneous : ∀ i z,
+    MvPolynomial.IsHomogeneous (δ₁ i z) (pShift i).toNat
   δ₂K : β₂ → β₁ → FractionRing (R3 k)
   δ₂_graded_zero : ∀ j i, qShift j ≤ pShift i → δ₂K j i = 0
   δ₁δ₂ : ∀ j,
@@ -1586,6 +1588,9 @@ structure GradedResolutionDuality
       (fun z => algebraMap (R3 k) (FractionRing (R3 k)) (δ₁ i z)) = 0
   circuit : β₂ → FractionRing (R3 k)
   circuit_full : ∀ j, circuit j ≠ 0
+  circuit_ne_zero : circuit ≠ 0
+  circuit_dependency :
+    ∑ j, circuit j • δ₂K j = 0
   kernel_line : ∀ c : β₂ → FractionRing (R3 k),
     (∑ j, c j • δ₂K j) = 0 →
       ∃ a : FractionRing (R3 k), c = a • circuit
@@ -1609,6 +1614,38 @@ noncomputable def p (D : GradedResolutionDuality I e β₁ β₂) : ℤ → ℤ 
 /-- The actual second Betti multiplicities attached to the finite shift basis. -/
 noncomputable def q (D : GradedResolutionDuality I e β₁ β₂) : ℤ → ℤ :=
   shiftMultiplicity D.qShift
+
+/-- The localized second differential, written with its actual finite bases.
+The rows are indexed by `β₂`, so its kernel is the coefficient space of
+dependencies among the columns appearing in the manuscript. -/
+noncomputable def δ₂ (D : GradedResolutionDuality I e β₁ β₂) :
+    (β₂ → FractionRing (R3 k)) →ₗ[FractionRing (R3 k)]
+      (β₁ → FractionRing (R3 k)) :=
+  Fintype.linearCombination (FractionRing (R3 k))
+    (fun j i => D.δ₂K j i)
+
+@[simp] lemma δ₂_apply (D : GradedResolutionDuality I e β₁ β₂)
+    (c : β₂ → FractionRing (R3 k)) :
+    D.δ₂ c = ∑ j, c j • D.δ₂K j := rfl
+
+lemma δ₂_kernel_eq_span_circuit (D : GradedResolutionDuality I e β₁ β₂) :
+    LinearMap.ker D.δ₂ =
+      Submodule.span (FractionRing (R3 k)) {D.circuit} := by
+  apply le_antisymm
+  · intro c hc
+    obtain ⟨a, ha⟩ := D.kernel_line c (by simpa [δ₂_apply] using hc)
+    rw [Submodule.mem_span_singleton]
+    exact ⟨a, ha.symm⟩
+  · apply Submodule.span_le.mpr
+    rintro c rfl
+    change D.δ₂ D.circuit = 0
+    rw [δ₂_apply]
+    simpa using D.circuit_dependency
+
+lemma δ₂_kernel_finrank (D : GradedResolutionDuality I e β₁ β₂) :
+    finrank (FractionRing (R3 k)) (LinearMap.ker D.δ₂) = 1 := by
+  rw [D.δ₂_kernel_eq_span_circuit]
+  simpa using finrank_span_singleton D.circuit_ne_zero
 
 lemma p_nonneg (D : GradedResolutionDuality I e β₁ β₂) (b : ℤ) : 0 ≤ D.p b :=
   shiftMultiplicity_nonneg _ _

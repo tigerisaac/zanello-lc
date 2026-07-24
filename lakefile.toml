@@ -1,6 +1,6 @@
 name = "LogConcavity"
 version = "0.1.0"
-defaultTargets = ["LogConcavity"]
+defaultTargets = ["LogConcavity", "GradedResolution", "ModuloStanley"]
 
 [[require]]
 name = "mathlib"
@@ -9,3 +9,33 @@ rev = "v4.31.0"
 
 [[lean_lib]]
 name = "LogConcavity"
+
+[[lean_lib]]
+name = "Scratch"
+
+[[lean_lib]]
+name = "GradedResolution"
+
+[[lean_lib]]
+name = "ModuloStanley"
+
+[[lean_lib]]
+name = "FormalDeps"
+roots = ["FormalDeps.Port.Mathlib", "FormalDepsBridge"]
+globs = [
+  "FormalDepsBridge",
+  "FormalDeps.Port.Mathlib.Algebra.Category.ModuleCat.Baer",
+  "FormalDeps.Port.Mathlib.RingTheory.Regular.Category",
+  "FormalDeps.Port.Mathlib.RingTheory.Regular.Depth",
+  "FormalDeps.Port.Mathlib.RingTheory.Regular.Ischebeck",
+  "FormalDeps.Port.Mathlib.RingTheory.Regular.AuslanderBuchsbaum",
+  "FormalDeps.Port.Mathlib.RingTheory.GlobalDimension",
+  "FormalDeps.Port.Mathlib.RingTheory.CohenMacaulay.Basic",
+  "FormalDeps.Port.Mathlib.RingTheory.RegularLocalRing.Basic",
+  "FormalDeps.Port.Mathlib.RingTheory.CohenMacaulay.Maximal",
+  "FormalDeps.Port.Mathlib.RingTheory.RegularLocalRing.GlobalDimension",
+  "FormalDeps.Port.Mathlib.RingTheory.RegularLocalRing.RegularRing.Basic",
+  "FormalDeps.Port.Mathlib.RingTheory.RegularLocalRing.RegularRing.Polynomial",
+  "FormalDeps.Port.Mathlib.RingTheory.RegularLocalRing.RegularRing.GlobalDimension",
+  "FormalDeps.Port.Mathlib.RingTheory.RegularLocalRing.RegularRing.Syzygy"
+]

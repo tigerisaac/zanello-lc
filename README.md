@@ -7,8 +7,12 @@ A Lean 4 + Mathlib formalization of the proof of:
 > and type two. Then its Hilbert function is log-concave:
 > `hᵢ² ≥ h_{i-1} h_{i+1}` for `1 ≤ i ≤ e−1`.
 
-All Lean code is in [`LogConcavity.lean`](LogConcavity.lean). Dependencies
-are pinned by `lean-toolchain` and `lake-manifest.json`.
+The main numerical development is in [`LogConcavity.lean`](LogConcavity.lean).
+[`GradedResolution.lean`](GradedResolution.lean) contains the explicit
+finite-basis/shifted-complex, graded Nakayama, localized Euler, and graded
+Matlis interfaces; [`Scratch.lean`](Scratch.lean) contains the low-level
+homogeneous and inverse-system constructions. Dependencies are pinned by
+`lean-toolchain` and `lake-manifest.json`.
 
 ## Verification status
 
@@ -83,6 +87,18 @@ by proof-carrying algebraic data:
 | actual Gorenstein annihilator quotient | `GorensteinAnnihilatorData.toGorensteinQuotientHF` |
 | degreewise ideal/quotient dimension split and equation (8) | `idealPiece_finrank_add_quotPiece`, `idealHilb_add_hilb`, `CriticalBranchCertificate.equation8` |
 
+The concrete graded-resolution module also proves the certificate-level
+consequences that were previously only described in the roadmap:
+
+| Resolution item | Lean object / theorem |
+|---|---|
+| finite homogeneous bases, shift multisets, and irrelevant-ideal minimality | `GradedMinimalFreeComplex`, `pMultiplicity`, `qMultiplicity`, `rMultiplicity`, `first_range_minimal`, `second_range_minimal`, `third_range_minimal` |
+| graded Nakayama for the displayed columns | `column_residue_independent_of_exact`, `firstNakayamaCertificate`, `secondNakayamaCertificate`, `thirdNakayamaCertificate` |
+| actual homogeneous minimal generators | `firstHomogeneousMinimalGenerators`, `secondHomogeneousMinimalGenerators`, `thirdHomogeneousMinimalGenerators` |
+| last-kernel freeness, Euler characteristic, and rank-one basis | `third_kernel_free`, `LocalizedThreeStepResolution.euler_characteristic`, `third_kernel_basis_fin_one_of_euler` |
+| Matlis components and their original Hilbert-function values | `GradedMatlisDualData.ofLevel`, `component_finrank_original_hilbert` |
+| full-support last-differential vector and its dependency | `lastDifferentialVector_full`, `lastDifferentialVector_dependency`, `proper_subfamily_delta₂` |
+
 `theorem1_of_resolution` feeds all of these derived facts into
 `theorem1_full`. Its user-visible mathematical inputs are the actual level
 algebra, a certified `GradedResolutionDuality`/`ResolutionPackage` pair,
@@ -94,32 +110,46 @@ as the single named proposition `HasGradedResolutionPackage I e`.
 ## Remaining trust boundary
 
 Mathlib 4.31 has a generic functorial projective-resolution API, but no
-minimal **graded** free resolutions, Hilbert-syzygy bridge, or graded
-Matlis-duality theory. The `FormalDeps/` directory now supplies a
-machine-checked port of the homological prerequisites — Ischebeck's depth
-bound, Auslander–Buchsbaum, Cohen–Macaulay freeness, and **Hilbert's
-Syzygy Theorem** (`globalDimension (MvPolynomial (Fin n) k) = n`), all
-audited to depend only on Lean's three standard axioms (see
-`FormalDeps/README.md`) — but these are not yet bridged to the graded,
-shift-carrying data the package needs. Consequently the repository still
-cannot prove the *existence* of
-`GradedResolutionDuality`/`ResolutionPackage` from
-`IsTypeTwoLevel I e`. In exact Lean terms, the missing theorem is
-`IsTypeTwoLevel I e → HasGradedResolutionPackage I e`. The package is deliberately proof-carrying: it
-contains finite bases and shifts, localized matrices, the last
-differential's full-support generator vector, degreewise exact linear maps,
-and the graded critical-branch construction. Once such a
-package is supplied, all former numerical assumptions are theorems listed
-above. In particular, the package now carries exact linear maps rather than
-the Hilbert-series and critical presentation dimension equalities; both
-equalities are kernel-checked consequences of rank–nullity.
+minimal **graded** free resolutions, no Koszul complex, and no graded
+Matlis-duality theory. The `FormalDeps/` directory supplies a machine-checked
+port of the homological prerequisites — Ischebeck's depth bound,
+Auslander–Buchsbaum, Cohen–Macaulay freeness, and **Hilbert's Syzygy
+Theorem** (`globalDimension (MvPolynomial (Fin n) k) = n`), all audited to
+depend only on Lean's three standard axioms (see `FormalDeps/README.md`).
 
-Stanley's monotonicity theorem is the other explicit input. Thus the new
-result is end-to-end **conditional on the missing resolution/duality
-existence theorem and Stanley**, not yet a theorem modulo Stanley alone.
-This distinction is reflected directly in the signature of
-`theorem1_of_resolution`; no `sorry`, custom axiom, or opaque numerical
-hypothesis hides it.
+[`ModuloStanley.lean`](ModuloStanley.lean) builds the graded minimal free
+complex, the graded Matlis-annihilator Gorenstein property, and the entire
+resolution/duality package **from `IsTypeTwoLevel I e` alone**, except for a
+single homological fact about the resolved module. In exact Lean terms the
+endpoint is
+
+```lean
+theorem theorem1_modulo_Stanley_of_lastBetti
+    (e : ℕ) (I : Ideal (R3 k)) (hA : IsTypeTwoLevel I e)
+    (hBetti : Fintype.card (GradedMinimalFreeComplex.ofLevel hA).β₃ = 1)
+    (hStanley : ...) :
+    ∀ i : ℤ, 1 ≤ i → i ≤ (e : ℤ) - 1 →
+      hilb I (i - 1) * hilb I (i + 1) ≤ hilb I i ^ 2
+```
+
+so besides Stanley's theorem the only remaining input is `hBetti`: the third
+free module in the minimal graded resolution of the Matlis dual has rank one.
+Equivalently `Tor₃(M, k) ≅ Soc(M)(-3)`. The socle side of that isomorphism is
+already proved here (`matlisDualSocle_finrank = 1`); the `Tor` side needs a
+Koszul complex on `(x₁, x₂, x₃)`, which Mathlib does not provide.
+
+Everything that used to be assumed alongside it is now derived:
+
+| former input | now proved by |
+|---|---|
+| `rShift a₀ = e + 3` | `lastShift_eq_of_unique` — third difference of the degreewise Euler identity at `e+3`, plus `first_shift_le` |
+| every coordinate of `d₃` is nonzero | `lastDifferential_coordinate_ne_zero` — exactness of the dualized complex plus minimality of `d₂` |
+| `I = span (entries of d₃)` | `originalIdeal_le_coordinateIdeal` and `coordinateIdeal_le_originalIdeal` — projective null-homotopies on the complex and on its dual |
+| `β₂` nonempty | `beta₂_nonempty_of_beta₃` |
+
+`#print axioms theorem1_modulo_Stanley_of_lastBetti` reports only `propext`,
+`Classical.choice`, `Quot.sound`. No `sorry`, custom axiom, or opaque
+numerical hypothesis hides the boundary.
 
 The legacy `theorem1_full` and `theorem1_of_level` are retained for
 compatibility and for the numerical consistency witness.

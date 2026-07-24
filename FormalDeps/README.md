@@ -80,8 +80,19 @@ named type arguments plus `by with_unfolding_all exact ...`.
 
 Nothing here is imported by `LogConcavity.lean` yet. `Hilberts_Syzygy`
 supplies the abstract finiteness input (global dimension of
-`k[x₁,x₂,x₃]` is 3), but bridging from categorical projective dimension
-to the *graded minimal* resolution-with-shifts and duality data of
-`HasGradedResolutionPackage` (graded Matlis duality, minimality, the
-critical-branch construction) remains open — see `Scratch.lean` for the
-graded scaffold built so far.
+`k[x₁,x₂,x₃]` is 3). The main tree now contains a separate
+`GradedResolution.lean` module that formalizes the downstream
+certificate-level consequences: finite shifted bases, homogeneous
+minimality/Nakayama certificates, localized Euler bookkeeping, and the
+graded Matlis component identities.
+
+`ModuloStanley.lean` imports the Rees/depth material from this port
+(`FormalDeps.Port.Mathlib.RingTheory.Regular.Depth`) to prove
+`Ext^i(MatlisDual I, R) = 0` for `i < 3`, which is what makes the dualized
+minimal complex exact — the key input to the last-differential arguments.
+With that in place the whole resolution/duality package is built from
+`IsTypeTwoLevel I e` except for one homological fact: that the third free
+module has rank one (`Fintype.card (GradedMinimalFreeComplex.ofLevel hA).β₃
+= 1`). Establishing it needs `Tor₃(M,k) ≅ Soc(M)(-3)`, i.e. a Koszul complex
+on the three variables — the one piece neither this port nor Mathlib 4.31
+supplies.
