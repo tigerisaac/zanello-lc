@@ -154,18 +154,36 @@ numerical hypothesis hides the boundary.
 The legacy `theorem1_full` and `theorem1_of_level` are retained for
 compatibility and for the numerical consistency witness.
 
-## Numerical consistency witness
+A concrete instance of `IsTypeTwoLevel` is constructed in
+[`Witness.lean`](Witness.lean); see [Non-vacuity](#non-vacuity-a-concrete-instance)
+below.
 
-Assumed hypotheses could in principle be mutually contradictory, making the
-theorem vacuous. The `NumericalConsistencyWitness` section rules this out:
-for the numerical data computed from the level algebra
-`A = R/Ann(X², Y²+XZ)` — Hilbert function `(1,3,2)`, socle degree 2, type
-two, dual resolution `F₁ = R(−1)³⊕R(−2)²`, `F₂ = R(−3)⁴`, `s = 5`, rank
-data `r₂ = 2, ε₂ = 0` — **every hypothesis of `theorem1_full` is
-machine-verified** (`consistency_witness`), and the theorem delivers the
-concrete inequality `h₀h₂ = 2 ≤ 9 = h₁²`. (The algebra itself is not
-constructed in Lean; the witness certifies exactly that the hypothesis set
-is jointly satisfiable, no more.)
+## Non-vacuity: a concrete instance
+
+Assumed hypotheses could in principle be mutually contradictory, or
+`IsTypeTwoLevel` could be unsatisfiable, making the theorem vacuous.
+[`Witness.lean`](Witness.lean) rules this out with an **actual algebra**, not
+just consistent numerical data: it constructs
+
+```
+J = (xy, xz, y², z², x³) ⊆ k[x,y,z]
+```
+
+(the inverse system `⟨X², YZ⟩`) and proves `isTypeTwoLevel_witness :
+IsTypeTwoLevel (witnessIdeal k) 2` — every field checked from the monomial
+generators, including `finrank (socle J) = 2` via an explicit basis
+`{x², yz}` of the socle. Feeding this instance through the repository's *own*
+`IsTypeTwoLevel`-derivations pins the Hilbert function to `(1, 3, 2)`
+(`witness_hilb_zero/one/two`) and yields the concrete inequality `h₀·h₂ = 2 ≤
+9 = h₁²` (`witness_log_concave`). `#print axioms` on each is clean. Because
+the derivations that compute `hilb J 1 = 3` and `hilb J 2 = 2` are the same
+lemmas the main theorem uses, this doubles as an end-to-end check of the
+`hilb`/`socle`/`quotPiece` definitions against a case computable by hand.
+
+The legacy `NumericalConsistencyWitness` section additionally certifies, for
+the numerical data `F₁ = R(−1)³⊕R(−2)²`, `F₂ = R(−3)⁴`, `s = 5`, `r₂ = 2`,
+`ε₂ = 0`, that every hypothesis of the older `theorem1_full` is jointly
+satisfiable (`consistency_witness`).
 
 ## Reproducing
 
