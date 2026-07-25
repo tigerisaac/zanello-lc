@@ -17,12 +17,20 @@ step is the connecting map of the Koszul homology sequence for a short exact
 sequence whose middle term is free, so rather than developing a general long
 exact sequence we prove exactly the three isomorphisms needed, by hand.
 
-This file has the first of them, `socle_quotient_equiv_H₂`: for a submodule
-`A ≤ B` with `B` Koszul-acyclic in degrees `2` and `3`,
+All three are here, each for a submodule `A ≤ B` with `B` Koszul-acyclic in
+the relevant degrees (which holds when `B` is free):
 
-```
-Soc (B ⧸ A) ≅ H₂ A,   b + A ↦ [(x₀ • b, x₁ • b, x₂ • b)].
-```
+* `socle_quotient_equiv_H₂` : `Soc (B ⧸ A) ≅ H₂ A`, by `b + A ↦ [(xᵢ • b)ᵢ]`;
+* `H₂_quotient_equiv_H₁` : `H₂ (B ⧸ A) ≅ H₁ A`, by `[γ] ↦ [d₂ b]` for any
+  lift `b` of the cycle `γ`;
+* `H₁_quotient_equiv_H₀` : `H₁ (B ⧸ A) ≅ H₀ A = A ⧸ m A`, by `[γ] ↦ [d₁ b]`,
+  under the minimality hypothesis `A ≤ m B` which makes the induced map
+  `A ⧸ m A → B ⧸ m B` zero.
+
+Each is built the same way: the connecting map is defined on a lift submodule
+of `B`, shown surjective using acyclicity of `B`, and its kernel is computed;
+the two presentations of that kernel are then glued with
+`quotKerEquivOfSurjective`.
 -/
 
 namespace LogConcavity
@@ -81,6 +89,9 @@ def boundaries₁ : Submodule (R3 k) (cycles₁ k M) :=
 
 /-- Koszul homology in degree one. -/
 abbrev H₁ := (cycles₁ k M) ⧸ (boundaries₁ k M)
+
+/-- Koszul homology in degree zero: `M ⧸ m M`. -/
+abbrev H₀ := M ⧸ LinearMap.range (d₁ k M)
 
 variable {k M}
 
@@ -268,6 +279,364 @@ def socle_quotient_equiv_H₂ :
 
 end Connecting
 
+/-! ## Degree-two homology of a quotient is degree-one homology of the submodule -/
+
+section Connecting₁
+
+variable {k : Type u} [Field k] {B : Type v} [AddCommGroup B] [Module (R3 k) B]
+  (A : Submodule (R3 k) B)
+
+/-- Triples in `B` whose image under `d₂` lies in `A`: the lift to `B` of the
+degree-two cycles of `B ⧸ A`. -/
+def cycleLift : Submodule (R3 k) (Fin 3 → B) where
+  carrier := {b : Fin 3 → B | ∀ i : Fin 3, d₂ k B b i ∈ A}
+  add_mem' {b b'} hb hb' i := by
+    simpa [map_add] using A.add_mem (hb i) (hb' i)
+  zero_mem' _ := by simp
+  smul_mem' c b hb i := by
+    simpa [map_smul] using A.smul_mem c (hb i)
+
+lemma mem_cycleLift {b : Fin 3 → B} :
+    b ∈ cycleLift A ↔ ∀ i : Fin 3, d₂ k B b i ∈ A :=
+  Iff.rfl
+
+/-! ### The `H₂` side -/
+
+/-- The reduction of a lifted cycle modulo `A`. -/
+def cycleLiftMod (b : cycleLift A) : Fin 3 → B ⧸ A :=
+  fun i => Submodule.Quotient.mk ((b : Fin 3 → B) i)
+
+lemma cycleLiftMod_mem_cycles (b : cycleLift A) : cycleLiftMod A b ∈ cycles₂ k (B ⧸ A) := by
+  rw [mem_cycles₂]
+  funext i
+  have h : (Submodule.Quotient.mk (d₂ k B (b : Fin 3 → B) i) : B ⧸ A) =
+      d₂ k (B ⧸ A) (cycleLiftMod A b) i := map_d₂ (A.mkQ) (b : Fin 3 → B) i
+  show d₂ k (B ⧸ A) (cycleLiftMod A b) i = 0
+  rw [← h, Submodule.Quotient.mk_eq_zero]
+  exact b.2 i
+
+/-- `H₂` of the quotient, seen from the lifted cycles. -/
+def toH₂Quot : cycleLift A →ₗ[R3 k] H₂ k (B ⧸ A) where
+  toFun b := Submodule.Quotient.mk ⟨cycleLiftMod A b, cycleLiftMod_mem_cycles A b⟩
+  map_add' b b' := by
+    rw [← Submodule.Quotient.mk_add]
+    congr 1
+  map_smul' c b := by
+    rw [RingHom.id_apply, ← Submodule.Quotient.mk_smul]
+    congr 1
+
+lemma toH₂Quot_apply (b : cycleLift A) :
+    toH₂Quot A b = Submodule.Quotient.mk ⟨cycleLiftMod A b, cycleLiftMod_mem_cycles A b⟩ :=
+  rfl
+
+lemma toH₂Quot_surjective : Function.Surjective (toH₂Quot A) := by
+  intro y
+  obtain ⟨γ, rfl⟩ := Submodule.Quotient.mk_surjective _ y
+  choose b hb using fun i => Submodule.Quotient.mk_surjective A ((γ : Fin 3 → B ⧸ A) i)
+  have hmem : b ∈ cycleLift A := by
+    intro i
+    have h := map_d₂ (A.mkQ) b i
+    simp only [Submodule.mkQ_apply] at h
+    rw [← Submodule.Quotient.mk_eq_zero, h]
+    have : (fun j => Submodule.Quotient.mk (b j) : Fin 3 → B ⧸ A) = (γ : Fin 3 → B ⧸ A) :=
+      funext hb
+    rw [this]
+    exact congrFun (mem_cycles₂.mp γ.2) i
+  refine ⟨⟨b, hmem⟩, ?_⟩
+  rw [toH₂Quot_apply]
+  congr 1
+  exact Subtype.ext (funext hb)
+
+/-! ### The `H₁` side -/
+
+/-- `d₂` of a lifted cycle, viewed as a triple of elements of `A`. -/
+def cycleLiftBoundary (b : cycleLift A) : Fin 3 → A :=
+  fun i => ⟨d₂ k B (b : Fin 3 → B) i, b.2 i⟩
+
+lemma coe_cycleLiftBoundary (b : cycleLift A) :
+    (fun i => ((cycleLiftBoundary A b i : A) : B)) = d₂ k B (b : Fin 3 → B) :=
+  rfl
+
+lemma cycleLiftBoundary_mem_cycles (b : cycleLift A) :
+    cycleLiftBoundary A b ∈ cycles₁ k A := by
+  apply LinearMap.mem_ker.mpr
+  apply Subtype.ext
+  have h := map_d₁ (A.subtype) (cycleLiftBoundary A b)
+  simp only [Submodule.coe_subtype] at h
+  rw [h, coe_cycleLiftBoundary]
+  have := congrArg (fun f => f (b : Fin 3 → B)) (d₁_comp_d₂ k B)
+  simpa [LinearMap.comp_apply] using this
+
+/-- The connecting map `cycleLift A → H₁ A`. -/
+def toH₁ : cycleLift A →ₗ[R3 k] H₁ k A where
+  toFun b := Submodule.Quotient.mk ⟨cycleLiftBoundary A b, cycleLiftBoundary_mem_cycles A b⟩
+  map_add' b b' := by
+    rw [← Submodule.Quotient.mk_add]
+    congr 1
+    apply Subtype.ext
+    funext i
+    exact Subtype.ext (congrFun (map_add (d₂ k B) (b : Fin 3 → B) (b' : Fin 3 → B)) i)
+  map_smul' c b := by
+    rw [RingHom.id_apply, ← Submodule.Quotient.mk_smul]
+    congr 1
+    apply Subtype.ext
+    funext i
+    exact Subtype.ext (congrFun (map_smul (d₂ k B) c (b : Fin 3 → B)) i)
+
+lemma toH₁_apply (b : cycleLift A) :
+    toH₁ A b = Submodule.Quotient.mk
+      ⟨cycleLiftBoundary A b, cycleLiftBoundary_mem_cycles A b⟩ :=
+  rfl
+
+variable (hex₂ : LinearMap.ker (d₂ k B) = LinearMap.range (d₃ k B))
+  (hex₁ : LinearMap.ker (d₁ k B) = LinearMap.range (d₂ k B))
+
+include hex₁ in
+lemma toH₁_surjective : Function.Surjective (toH₁ A) := by
+  intro y
+  obtain ⟨α, rfl⟩ := Submodule.Quotient.mk_surjective _ y
+  -- the cycle, read in `B`, is a boundary there
+  have hker : (fun i => ((α : Fin 3 → A) i : B)) ∈ LinearMap.ker (d₁ k B) := by
+    apply LinearMap.mem_ker.mpr
+    have h := map_d₁ (A.subtype) (α : Fin 3 → A)
+    simp only [Submodule.coe_subtype] at h
+    rw [← h]
+    have : d₁ k A (α : Fin 3 → A) = 0 := LinearMap.mem_ker.mp α.2
+    simp [this]
+  obtain ⟨b, hb⟩ := hex₁ ▸ hker
+  have hmem : b ∈ cycleLift A := by
+    intro i
+    rw [show d₂ k B b i = ((α : Fin 3 → A) i : B) from congrFun hb i]
+    exact ((α : Fin 3 → A) i).2
+  refine ⟨⟨b, hmem⟩, ?_⟩
+  rw [toH₁_apply]
+  congr 1
+  apply Subtype.ext
+  funext i
+  exact Subtype.ext (congrFun hb i)
+
+include hex₂ in
+lemma ker_toH₂Quot_eq_ker_toH₁ :
+    LinearMap.ker (toH₂Quot A) = LinearMap.ker (toH₁ A) := by
+  ext b
+  simp only [LinearMap.mem_ker, toH₂Quot_apply, toH₁_apply,
+    Submodule.Quotient.mk_eq_zero]
+  have hz : d₂ k B (d₃ k B (0 : B)) = 0 := by simp
+  constructor
+  · -- the reduced cycle is a boundary in `B ⧸ A`: subtract a lifted boundary
+    rintro ⟨c, hc⟩
+    obtain ⟨b₀, rfl⟩ := Submodule.Quotient.mk_surjective A c
+    have hd₃ : ∀ i, (Submodule.Quotient.mk (d₃ k B b₀ i) : B ⧸ A) =
+        d₃ k (B ⧸ A) (Submodule.Quotient.mk b₀) i := fun i => map_d₃ (A.mkQ) b₀ i
+    have hdiff : ∀ i, (b : Fin 3 → B) i - d₃ k B b₀ i ∈ A := by
+      intro i
+      rw [← Submodule.Quotient.mk_eq_zero, Submodule.Quotient.mk_sub, sub_eq_zero,
+        hd₃ i, congrFun hc i]
+      rfl
+    -- so `d₂ b = d₂ (b - d₃ b₀)` is the boundary of a triple in `A`
+    set α : Fin 3 → A := fun j => ⟨(b : Fin 3 → B) j - d₃ k B b₀ j, hdiff j⟩ with hαdef
+    refine ⟨α, ?_⟩
+    funext i
+    apply Subtype.ext
+    have h := map_d₂ (A.subtype) α i
+    simp only [Submodule.coe_subtype] at h
+    rw [h, show (fun j => ((α j : A) : B)) = (b : Fin 3 → B) - d₃ k B b₀ from rfl, map_sub]
+    have hzero : d₂ k B (d₃ k B b₀) = 0 := by
+      have := congrArg (fun f => f b₀) (d₂_comp_d₃ k B)
+      simpa [LinearMap.comp_apply] using this
+    rw [hzero]
+    simp [cycleLiftBoundary]
+  · -- conversely a boundary in `A` exhibits the reduced cycle as `d₃` of a class
+    rintro ⟨α, hα⟩
+    have hcomp : ∀ i, d₂ k B (fun j => ((α j : A) : B)) i = d₂ k B (b : Fin 3 → B) i := by
+      intro i
+      have h : ((d₂ k A α i : A) : B) = d₂ k B (fun j => ((α j : A) : B)) i :=
+        map_d₂ (A.subtype) α i
+      rw [← h, show d₂ k A α i = cycleLiftBoundary A b i from congrFun hα i]
+      rfl
+    have hdiff : d₂ k B ((b : Fin 3 → B) - fun i => ((α i : A) : B)) = 0 := by
+      funext i
+      rw [map_sub]
+      simp [hcomp i]
+    obtain ⟨b₀, hb₀⟩ := hex₂ ▸ (LinearMap.mem_ker.mpr hdiff)
+    refine ⟨Submodule.Quotient.mk b₀, ?_⟩
+    funext i
+    have h : (Submodule.Quotient.mk (d₃ k B b₀ i) : B ⧸ A) =
+        d₃ k (B ⧸ A) (Submodule.Quotient.mk b₀) i := map_d₃ (A.mkQ) b₀ i
+    rw [← h, show d₃ k B b₀ i = (b : Fin 3 → B) i - ((α i : A) : B) from congrFun hb₀ i,
+      Submodule.Quotient.mk_sub, (Submodule.Quotient.mk_eq_zero A).mpr ((α i : A)).2,
+      sub_zero]
+    rfl
+
+/-- **Second connecting isomorphism.**  If `B` is Koszul-acyclic in degrees
+one, two and three — for instance if `B` is free — then the degree-two
+homology of `B ⧸ A` is the degree-one homology of `A`. -/
+def H₂_quotient_equiv_H₁ : H₂ k (B ⧸ A) ≃ₗ[R3 k] H₁ k A :=
+  (LinearMap.quotKerEquivOfSurjective (toH₂Quot A) (toH₂Quot_surjective A)).symm.trans
+    ((Submodule.quotEquivOfEq _ _ (ker_toH₂Quot_eq_ker_toH₁ A hex₂)).trans
+      (LinearMap.quotKerEquivOfSurjective (toH₁ A) (toH₁_surjective A hex₁)))
+
+end Connecting₁
+
+
+/-! ## Degree-one homology of a quotient is degree-zero homology of the submodule
+
+In the generality needed here the submodule `A` sits inside `m B` — that is
+minimality of the resolution — which makes the induced map `A ⧸ m A → B ⧸ m B`
+zero and so identifies `H₁ (B ⧸ A)` with all of `H₀ A`. -/
+
+section Connecting₀
+
+variable {k : Type u} [Field k] {B : Type v} [AddCommGroup B] [Module (R3 k) B]
+  (A : Submodule (R3 k) B)
+
+/-- Triples in `B` whose image under `d₁` lies in `A`: the lift to `B` of the
+degree-one cycles of `B ⧸ A`. -/
+def cycleLift₁ : Submodule (R3 k) (Fin 3 → B) where
+  carrier := {b : Fin 3 → B | d₁ k B b ∈ A}
+  add_mem' {b b'} hb hb' := by simpa [map_add] using A.add_mem hb hb'
+  zero_mem' := by simp
+  smul_mem' c b hb := by simpa [map_smul] using A.smul_mem c hb
+
+lemma mem_cycleLift₁ {b : Fin 3 → B} : b ∈ cycleLift₁ A ↔ d₁ k B b ∈ A :=
+  Iff.rfl
+
+/-! ### The `H₁` side -/
+
+lemma cycleLift₁Mod_mem_cycles (b : cycleLift₁ A) :
+    (fun i => Submodule.Quotient.mk ((b : Fin 3 → B) i) : Fin 3 → B ⧸ A) ∈
+      cycles₁ k (B ⧸ A) := by
+  apply LinearMap.mem_ker.mpr
+  have h : (Submodule.Quotient.mk (d₁ k B (b : Fin 3 → B)) : B ⧸ A) =
+      d₁ k (B ⧸ A) (fun i => Submodule.Quotient.mk ((b : Fin 3 → B) i)) :=
+    map_d₁ (A.mkQ) (b : Fin 3 → B)
+  rw [← h, Submodule.Quotient.mk_eq_zero]
+  exact b.2
+
+/-- `H₁` of the quotient, seen from the lifted cycles. -/
+def toH₁Quot : cycleLift₁ A →ₗ[R3 k] H₁ k (B ⧸ A) where
+  toFun b := Submodule.Quotient.mk
+    ⟨fun i => Submodule.Quotient.mk ((b : Fin 3 → B) i), cycleLift₁Mod_mem_cycles A b⟩
+  map_add' b b' := by
+    rw [← Submodule.Quotient.mk_add]
+    congr 1
+  map_smul' c b := by
+    rw [RingHom.id_apply, ← Submodule.Quotient.mk_smul]
+    congr 1
+
+lemma toH₁Quot_apply (b : cycleLift₁ A) :
+    toH₁Quot A b = Submodule.Quotient.mk
+      ⟨fun i => Submodule.Quotient.mk ((b : Fin 3 → B) i), cycleLift₁Mod_mem_cycles A b⟩ :=
+  rfl
+
+lemma toH₁Quot_surjective : Function.Surjective (toH₁Quot A) := by
+  intro y
+  obtain ⟨γ, rfl⟩ := Submodule.Quotient.mk_surjective _ y
+  choose b hb using fun i => Submodule.Quotient.mk_surjective A ((γ : Fin 3 → B ⧸ A) i)
+  have hmem : b ∈ cycleLift₁ A := by
+    rw [mem_cycleLift₁, ← Submodule.Quotient.mk_eq_zero]
+    have h : (Submodule.Quotient.mk (d₁ k B b) : B ⧸ A) =
+        d₁ k (B ⧸ A) (fun i => Submodule.Quotient.mk (b i)) := map_d₁ (A.mkQ) b
+    rw [h, show (fun i => Submodule.Quotient.mk (b i) : Fin 3 → B ⧸ A) =
+      (γ : Fin 3 → B ⧸ A) from funext hb]
+    exact LinearMap.mem_ker.mp γ.2
+  refine ⟨⟨b, hmem⟩, ?_⟩
+  rw [toH₁Quot_apply]
+  congr 1
+  exact Subtype.ext (funext hb)
+
+/-! ### The `H₀` side -/
+
+/-- The connecting map `cycleLift₁ A → H₀ A`, sending a lifted cycle `b` to
+the class of `d₁ b`. -/
+def toH₀ : cycleLift₁ A →ₗ[R3 k] H₀ k A where
+  toFun b := Submodule.Quotient.mk ⟨d₁ k B (b : Fin 3 → B), b.2⟩
+  map_add' b b' := by
+    rw [← Submodule.Quotient.mk_add]
+    congr 1
+    exact Subtype.ext (map_add (d₁ k B) (b : Fin 3 → B) (b' : Fin 3 → B))
+  map_smul' c b := by
+    rw [RingHom.id_apply, ← Submodule.Quotient.mk_smul]
+    congr 1
+    exact Subtype.ext (map_smul (d₁ k B) c (b : Fin 3 → B))
+
+lemma toH₀_apply (b : cycleLift₁ A) :
+    toH₀ A b = Submodule.Quotient.mk ⟨d₁ k B (b : Fin 3 → B), b.2⟩ :=
+  rfl
+
+variable (hex₁ : LinearMap.ker (d₁ k B) = LinearMap.range (d₂ k B))
+  (hmin : A ≤ LinearMap.range (d₁ k B))
+
+include hmin in
+lemma toH₀_surjective : Function.Surjective (toH₀ A) := by
+  intro y
+  obtain ⟨a, rfl⟩ := Submodule.Quotient.mk_surjective _ y
+  obtain ⟨b, hb⟩ := hmin a.2
+  have hmem : b ∈ cycleLift₁ A := by
+    rw [mem_cycleLift₁, hb]
+    exact a.2
+  refine ⟨⟨b, hmem⟩, ?_⟩
+  rw [toH₀_apply]
+  congr 1
+  exact Subtype.ext hb
+
+include hex₁ in
+lemma ker_toH₁Quot_eq_ker_toH₀ :
+    LinearMap.ker (toH₁Quot A) = LinearMap.ker (toH₀ A) := by
+  ext b
+  simp only [LinearMap.mem_ker, toH₁Quot_apply, toH₀_apply,
+    Submodule.Quotient.mk_eq_zero]
+  constructor
+  · rintro ⟨c, hc⟩
+    choose b₀ hb₀ using fun i => Submodule.Quotient.mk_surjective A (c i)
+    have hcfun : (fun j => Submodule.Quotient.mk (b₀ j) : Fin 3 → B ⧸ A) = c := funext hb₀
+    have hd₂ : ∀ i, (Submodule.Quotient.mk (d₂ k B b₀ i) : B ⧸ A) = d₂ k (B ⧸ A) c i := by
+      intro i
+      rw [← hcfun]
+      exact map_d₂ (A.mkQ) b₀ i
+    have hdiff : ∀ i, (b : Fin 3 → B) i - d₂ k B b₀ i ∈ A := by
+      intro i
+      rw [← Submodule.Quotient.mk_eq_zero, Submodule.Quotient.mk_sub, sub_eq_zero,
+        hd₂ i, congrFun hc i]
+      rfl
+    set α : Fin 3 → A := fun i => ⟨(b : Fin 3 → B) i - d₂ k B b₀ i, hdiff i⟩ with hαdef
+    refine ⟨α, ?_⟩
+    apply Subtype.ext
+    have h := map_d₁ (A.subtype) α
+    simp only [Submodule.coe_subtype] at h
+    rw [h, show (fun j => ((α j : A) : B)) = (b : Fin 3 → B) - d₂ k B b₀ from rfl, map_sub]
+    have hzero : d₁ k B (d₂ k B b₀) = 0 := by
+      have := congrArg (fun f => f b₀) (d₁_comp_d₂ k B)
+      simpa [LinearMap.comp_apply] using this
+    rw [hzero, sub_zero]
+  · rintro ⟨α, hα⟩
+    have hcomp : d₁ k B (fun j => ((α j : A) : B)) = d₁ k B (b : Fin 3 → B) := by
+      have h := map_d₁ (A.subtype) α
+      simp only [Submodule.coe_subtype] at h
+      rw [← h, show d₁ k A α = (⟨d₁ k B (b : Fin 3 → B), b.2⟩ : A) from hα]
+    have hdiff : d₁ k B ((b : Fin 3 → B) - fun i => ((α i : A) : B)) = 0 := by
+      rw [map_sub, hcomp, sub_self]
+    obtain ⟨b₀, hb₀⟩ := hex₁ ▸ (LinearMap.mem_ker.mpr hdiff)
+    refine ⟨fun i => Submodule.Quotient.mk (b₀ i), ?_⟩
+    funext i
+    have h : (Submodule.Quotient.mk (d₂ k B b₀ i) : B ⧸ A) =
+        d₂ k (B ⧸ A) (fun j => Submodule.Quotient.mk (b₀ j)) i := map_d₂ (A.mkQ) b₀ i
+    rw [← h, show d₂ k B b₀ i = (b : Fin 3 → B) i - ((α i : A) : B) from congrFun hb₀ i,
+      Submodule.Quotient.mk_sub, (Submodule.Quotient.mk_eq_zero A).mpr ((α i : A)).2,
+      sub_zero]
+    rfl
+
+/-- **Third connecting isomorphism.**  If `B` is Koszul-acyclic in degree one
+and `A` lies inside `m B` — minimality — then the degree-one homology of
+`B ⧸ A` is `A ⧸ m A`. -/
+def H₁_quotient_equiv_H₀ : H₁ k (B ⧸ A) ≃ₗ[R3 k] H₀ k A :=
+  (LinearMap.quotKerEquivOfSurjective (toH₁Quot A) (toH₁Quot_surjective A)).symm.trans
+    ((Submodule.quotEquivOfEq _ _ (ker_toH₁Quot_eq_ker_toH₀ A hex₁)).trans
+      (LinearMap.quotKerEquivOfSurjective (toH₀ A) (toH₀_surjective A hmin)))
+
+end Connecting₀
+
+
 end
 
 end Koszul
@@ -279,3 +648,9 @@ end LogConcavity
 #print axioms LogConcavity.Koszul.toH₂_surjective
 #print axioms LogConcavity.Koszul.ker_toH₂
 #print axioms LogConcavity.Koszul.socle_quotient_equiv_H₂
+#print axioms LogConcavity.Koszul.toH₁_surjective
+#print axioms LogConcavity.Koszul.ker_toH₂Quot_eq_ker_toH₁
+#print axioms LogConcavity.Koszul.H₂_quotient_equiv_H₁
+#print axioms LogConcavity.Koszul.toH₀_surjective
+#print axioms LogConcavity.Koszul.ker_toH₁Quot_eq_ker_toH₀
+#print axioms LogConcavity.Koszul.H₁_quotient_equiv_H₀
