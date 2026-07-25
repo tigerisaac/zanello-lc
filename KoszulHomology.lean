@@ -955,6 +955,102 @@ def koszulResolutionWitness :
 end Witness
 
 
+/-! ## Degree-zero homology of a free module
+
+`H₀` of `ι → R3 k` is the reduction mod `m`, i.e. `ι → k`.  This is what turns
+the conclusion `Soc M ≅ F₃ ⧸ m F₃` into a statement about the rank of `F₃`. -/
+
+section FreeH₀
+
+variable {k : Type u} [Field k] {ι : Type w}
+
+lemma mem_idealOfVars_iff_constantCoeff {f : R3 k} :
+    f ∈ MvPolynomial.idealOfVars (Fin 3) k ↔ MvPolynomial.constantCoeff f = 0 := by
+  have himage : MvPolynomial.idealOfVars (Fin 3) k =
+      Ideal.span ((X (R := k)) '' (Set.univ : Set (Fin 3))) := by
+    rw [Set.image_univ]
+  rw [himage, MvPolynomial.mem_ideal_span_X_image]
+  constructor
+  · intro h
+    by_contra hc
+    have h0 : (0 : Fin 3 →₀ ℕ) ∈ f.support :=
+      MvPolynomial.mem_support_iff.mpr (by simpa [MvPolynomial.constantCoeff_eq] using hc)
+    obtain ⟨i, -, hi⟩ := h _ h0
+    simp at hi
+  · intro h m hm
+    by_contra hcon
+    push Not at hcon
+    have hm0 : m = 0 := by
+      ext i
+      simpa using hcon i (Set.mem_univ i)
+    rw [hm0] at hm
+    exact (MvPolynomial.mem_support_iff.mp hm) (by simpa [MvPolynomial.constantCoeff_eq] using h)
+
+/-- The Koszul boundaries of a free module are exactly the vectors whose
+entries have zero constant term. -/
+lemma mem_range_d₁_pi_iff {f : ι → R3 k} :
+    f ∈ LinearMap.range (d₁ k (ι → R3 k)) ↔
+      ∀ j, MvPolynomial.constantCoeff (f j) = 0 := by
+  constructor
+  · rintro ⟨g, rfl⟩ j
+    rw [d₁_apply]
+    simp
+  · intro h
+    choose c hc using fun j => (Submodule.mem_span_range_iff_exists_fun (R3 k)).mp
+      (mem_idealOfVars_iff_constantCoeff.mpr (h j))
+    refine ⟨fun i j => c j i, ?_⟩
+    funext j
+    rw [d₁_apply]
+    have := hc j
+    rw [Fin.sum_univ_three] at this
+    simpa [smul_eq_mul, mul_comm] using this
+
+/-- Vectors with entries in the irrelevant ideal are Koszul boundaries: this is
+the form in which minimality of a resolution is used. -/
+lemma mem_range_d₁_pi_of_entries_mem {f : ι → R3 k}
+    (hf : ∀ j, f j ∈ MvPolynomial.idealOfVars (Fin 3) k) :
+    f ∈ LinearMap.range (d₁ k (ι → R3 k)) :=
+  mem_range_d₁_pi_iff.mpr fun j => mem_idealOfVars_iff_constantCoeff.mp (hf j)
+
+/-- Coordinatewise reduction modulo the irrelevant ideal. -/
+def piConstantCoeff : (ι → R3 k) →ₗ[k] (ι → k) where
+  toFun f := fun j => MvPolynomial.constantCoeff (f j)
+  map_add' f g := by funext j; simp
+  map_smul' c f := by funext j; simp
+
+lemma piConstantCoeff_surjective :
+    Function.Surjective (piConstantCoeff (k := k) (ι := ι)) :=
+  fun c => ⟨fun j => MvPolynomial.C (c j), by funext j; simp [piConstantCoeff]⟩
+
+lemma ker_piConstantCoeff :
+    LinearMap.ker (piConstantCoeff (k := k) (ι := ι)) =
+      (LinearMap.range (d₁ k (ι → R3 k))).restrictScalars k := by
+  ext f
+  simp only [LinearMap.mem_ker, Submodule.restrictScalars_mem]
+  rw [mem_range_d₁_pi_iff]
+  constructor
+  · intro h j
+    exact congrFun h j
+  · intro h
+    funext j
+    exact h j
+
+/-- **Degree-zero homology of a free module.**  `(ι → R3 k) ⧸ m` is `ι → k`. -/
+def H₀PiEquiv : H₀ k (ι → R3 k) ≃ₗ[k] (ι → k) :=
+  (Submodule.Quotient.restrictScalarsEquiv k
+      (LinearMap.range (d₁ k (ι → R3 k)))).symm.trans
+    ((Submodule.quotEquivOfEq _ _ ker_piConstantCoeff.symm).trans
+      (LinearMap.quotKerEquivOfSurjective _ piConstantCoeff_surjective))
+
+/-- The rank of the degree-zero homology of a free module is its rank. -/
+lemma finrank_H₀Pi [Fintype ι] :
+    Module.finrank k (H₀ k (ι → R3 k)) = Fintype.card ι := by
+  rw [(H₀PiEquiv (k := k) (ι := ι)).finrank_eq]
+  simp
+
+end FreeH₀
+
+
 end
 
 end Koszul
@@ -980,3 +1076,5 @@ end LogConcavity
 #print axioms LogConcavity.Koszul.socleEquivH₀OfResolution
 #print axioms LogConcavity.Koszul.nontrivial_H₀_self
 #print axioms LogConcavity.Koszul.koszulResolutionWitness
+#print axioms LogConcavity.Koszul.mem_range_d₁_pi_of_entries_mem
+#print axioms LogConcavity.Koszul.finrank_H₀Pi

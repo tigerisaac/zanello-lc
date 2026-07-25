@@ -109,6 +109,23 @@ as the single named proposition `HasGradedResolutionPackage I e`.
 
 ## Remaining trust boundary
 
+**Stanley's theorem is now the only assumed input.** In exact Lean terms the
+endpoint is `theorem1_modulo_Stanley` in [`BettiThree.lean`](BettiThree.lean):
+
+```lean
+theorem theorem1_modulo_Stanley
+    (e : ℕ) (I : Ideal (R3 k)) (hA : IsTypeTwoLevel I e)
+    (hStanley : ∀ B E, GorensteinQuotientHF k B E →
+      ∀ i j : ℤ, 0 ≤ j → j ≤ i → 2 * i ≤ E → B j ≤ B i) :
+    ∀ i : ℤ, 1 ≤ i → i ≤ (e : ℤ) - 1 →
+      hilb I (i - 1) * hilb I (i + 1) ≤ hilb I i ^ 2
+```
+
+`#print axioms` reports only `propext`, `Classical.choice`, `Quot.sound`. No
+`sorry`, custom axiom, or opaque numerical hypothesis hides the boundary, and
+`IsTypeTwoLevel` is not vacuous — [`Witness.lean`](Witness.lean) exhibits a
+concrete instance (see [Non-vacuity](#non-vacuity-a-concrete-instance)).
+
 Mathlib 4.31 has a generic functorial projective-resolution API, but no
 minimal **graded** free resolutions, no Koszul complex, and no graded
 Matlis-duality theory. The `FormalDeps/` directory supplies a machine-checked
@@ -120,26 +137,14 @@ depend only on Lean's three standard axioms (see `FormalDeps/README.md`).
 [`ModuloStanley.lean`](ModuloStanley.lean) builds the graded minimal free
 complex, the graded Matlis-annihilator Gorenstein property, and the entire
 resolution/duality package **from `IsTypeTwoLevel I e` alone**, except for a
-single homological fact about the resolved module. In exact Lean terms the
-endpoint is
+single homological fact about the resolved module: `hBetti`, that the third
+free module in the minimal graded resolution of the Matlis dual has rank one
+(equivalently `Tor₃(M, k) ≅ Soc(M)(-3)`). Its socle side was already proved
+there (`matlisDualSocle_finrank = 1`); the `Tor` side needed a Koszul complex
+on `(x₁, x₂, x₃)`, which Mathlib does not provide. The three files below
+supply it and close the gap.
 
-```lean
-theorem theorem1_modulo_Stanley_of_lastBetti
-    (e : ℕ) (I : Ideal (R3 k)) (hA : IsTypeTwoLevel I e)
-    (hBetti : Fintype.card (GradedMinimalFreeComplex.ofLevel hA).β₃ = 1)
-    (hStanley : ...) :
-    ∀ i : ℤ, 1 ≤ i → i ≤ (e : ℤ) - 1 →
-      hilb I (i - 1) * hilb I (i + 1) ≤ hilb I i ^ 2
-```
-
-so besides Stanley's theorem the only remaining input is `hBetti`: the third
-free module in the minimal graded resolution of the Matlis dual has rank one.
-Equivalently `Tor₃(M, k) ≅ Soc(M)(-3)`. The socle side of that isomorphism is
-already proved here (`matlisDualSocle_finrank = 1`); the `Tor` side needs a
-Koszul complex on `(x₁, x₂, x₃)`, which Mathlib does not provide.
-
-Work on that side has started in [`Koszul.lean`](Koszul.lean), which builds
-the missing complex by hand:
+[`Koszul.lean`](Koszul.lean) builds the missing complex by hand:
 
 ```
 0 → M → M³ → M³ → M → 0
@@ -175,13 +180,24 @@ which is exactly "the last Betti number is the type of `M`". The hypotheses
 are not vacuous: `koszulResolutionWitness` instantiates the theorem at the
 Koszul complex itself, which is a minimal free resolution of `k = R3 k ⧸ m`,
 and `nontrivial_H₀_self` shows the resulting conclusion is about nonzero
-modules. What remains for
-`hBetti` is to instantiate this at `GradedMinimalFreeComplex.ofLevel hA` and
-to identify `F₃ ⧸ m F₃` with `k^{β₃}`, then combine with the socle
-computation `matlisDualSocle_finrank = 1`. All of these results are audited
-too, and depend only on the three standard axioms.
+modules.
 
-Everything that used to be assumed alongside it is now derived:
+[`BettiThree.lean`](BettiThree.lean) instantiates that chain at the minimal
+graded free complex of the Matlis dual. The complex is exact with `d₃`
+injective by construction, its free modules are Koszul-acyclic, and its
+minimality (`d₃_minimal`: the entries of `d₃` lie in the irrelevant ideal)
+gives the hypothesis `im δ₃ ≤ m F₂`. So
+
+```
+Soc (MatlisDual I) ≅ (β₃ → R) ⧸ m (β₃ → R),
+```
+
+and comparing `k`-dimensions — `1` on the left by `matlisDualSocle_finrank`,
+`Fintype.card β₃` on the right by `finrank_H₀Pi` — yields
+`card_beta₃_eq_one`, which is `hBetti`. Feeding it to
+`theorem1_modulo_Stanley_of_lastBetti` gives the endpoint above.
+
+Everything that used to be assumed alongside `hBetti` is derived too:
 
 | former input | now proved by |
 |---|---|
@@ -189,10 +205,7 @@ Everything that used to be assumed alongside it is now derived:
 | every coordinate of `d₃` is nonzero | `lastDifferential_coordinate_ne_zero` — exactness of the dualized complex plus minimality of `d₂` |
 | `I = span (entries of d₃)` | `originalIdeal_le_coordinateIdeal` and `coordinateIdeal_le_originalIdeal` — projective null-homotopies on the complex and on its dual |
 | `β₂` nonempty | `beta₂_nonempty_of_beta₃` |
-
-`#print axioms theorem1_modulo_Stanley_of_lastBetti` reports only `propext`,
-`Classical.choice`, `Quot.sound`. No `sorry`, custom axiom, or opaque
-numerical hypothesis hides the boundary.
+| `β₃` has one element | `card_beta₃_eq_one` — the Koszul chain above |
 
 The legacy `theorem1_full` and `theorem1_of_level` are retained for
 compatibility and for the numerical consistency witness.
