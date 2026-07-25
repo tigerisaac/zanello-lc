@@ -1,6 +1,6 @@
 name = "LogConcavity"
 version = "0.1.0"
-defaultTargets = ["LogConcavity", "GradedResolution", "ModuloStanley", "Witness"]
+defaultTargets = ["LogConcavity", "GradedResolution", "ModuloStanley", "Witness", "Koszul"]
 
 [[require]]
 name = "mathlib"
@@ -21,6 +21,9 @@ name = "ModuloStanley"
 
 [[lean_lib]]
 name = "Witness"
+
+[[lean_lib]]
+name = "Koszul"
 
 [[lean_lib]]
 name = "FormalDeps"

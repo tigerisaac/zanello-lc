@@ -138,6 +138,24 @@ Equivalently `Tor₃(M, k) ≅ Soc(M)(-3)`. The socle side of that isomorphism i
 already proved here (`matlisDualSocle_finrank = 1`); the `Tor` side needs a
 Koszul complex on `(x₁, x₂, x₃)`, which Mathlib does not provide.
 
+Work on that side has started in [`Koszul.lean`](Koszul.lean), which builds
+the missing complex by hand:
+
+```
+0 → M → M³ → M³ → M → 0
+      d₃    d₂    d₁
+```
+
+for an arbitrary `R3 k`-module `M`, with `ker d₃` the socle `(0 :_M m)`. Over
+`R3 k` itself the complex is proved exact (`d₃_injective`,
+`ker_d₂_eq_range_d₃`, `ker_d₁_eq_range_d₂`), and exactness is transferred
+coordinatewise to free modules `ι → R3 k` (`…_pi` variants), so the Koszul
+homology of a free module vanishes in positive degrees. What remains for
+`hBetti` is the long exact sequence argument that walks this vanishing up the
+three syzygies of the minimal resolution, turning `Soc(M) = H₃(K ⊗ M)` into
+`F₃ ⊗ k`. Those results are audited too, and depend only on the three
+standard axioms.
+
 Everything that used to be assumed alongside it is now derived:
 
 | former input | now proved by |
