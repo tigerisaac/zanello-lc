@@ -28,13 +28,42 @@ jobs:
           set -o pipefail
           lake build | tee build.log
 
+      - name: Normalize axiom audit
+        run: |
+          # Lean may wrap a single `#print axioms` result across several
+          # physical lines. Join each complete result before validating it.
+          awk '
+            function emit_record() {
+              gsub(/[[:space:]]+/, " ", record)
+              print record
+              record = ""
+              capturing = 0
+            }
+            {
+              if (!capturing && /depends on axioms:/) {
+                record = $0
+                capturing = 1
+              } else if (capturing) {
+                record = record " " $0
+              }
+              if (capturing && $0 ~ /\][[:space:]]*$/) {
+                emit_record()
+              }
+            }
+            END {
+              if (capturing) {
+                exit 2
+              }
+            }
+          ' build.log > axiom-audit.log
+
       - name: Record axiom audit
         run: |
           {
             echo "## Axiom audit"
             echo ""
             echo '```'
-            grep "depends on axioms" build.log
+            cat axiom-audit.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -42,17 +71,21 @@ jobs:
         run: |
           # every audited theorem must be present and must depend on nothing
           # beyond Lean's three standard foundational axioms
-          count=$(grep -c "depends on axioms" build.log)
+          count=$(wc -l < axiom-audit.log)
           echo "audited declarations: $count"
           test "$count" -ge 21
-          if grep "depends on axioms" build.log \
-              | grep -v "\[propext, Classical.choice, Quot.sound\]"; then
+          if grep -Ev \
+              'depends on axioms: \[propext, Classical.choice, Quot.sound\]$' \
+              axiom-audit.log; then
             echo "::error::unexpected axioms detected"
             exit 1
           fi
 
       - name: Upload build log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: axiom-audit
-          path: build.log
+          path: |
+            build.log
+            axiom-audit.log
