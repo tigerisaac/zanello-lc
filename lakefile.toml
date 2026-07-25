@@ -1,6 +1,6 @@
 name = "LogConcavity"
 version = "0.1.0"
-defaultTargets = ["LogConcavity", "GradedResolution", "ModuloStanley", "Witness", "Koszul", "KoszulHomology", "BettiThree"]
+defaultTargets = ["LogConcavity", "GradedResolution", "ModuloStanley", "Witness", "Koszul", "KoszulHomology", "BettiThree", "Statement"]
 
 [[require]]
 name = "mathlib"
@@ -11,7 +11,7 @@ rev = "v4.31.0"
 name = "LogConcavity"
 
 [[lean_lib]]
-name = "Scratch"
+name = "InverseSystem"
 
 [[lean_lib]]
 name = "GradedResolution"
@@ -30,6 +30,9 @@ name = "KoszulHomology"
 
 [[lean_lib]]
 name = "BettiThree"
+
+[[lean_lib]]
+name = "Statement"
 
 [[lean_lib]]
 name = "FormalDeps"

@@ -69,8 +69,8 @@ jobs:
 
       - name: Verify axiom audit is clean
         run: |
-          # every audited theorem must be present and must depend on nothing
-          # beyond Lean's three standard foundational axioms
+          # every audited theorem must depend on nothing beyond Lean's three
+          # standard foundational axioms
           count=$(wc -l < axiom-audit.log)
           echo "audited declarations: $count"
           test "$count" -ge 21
@@ -81,6 +81,31 @@ jobs:
             exit 1
           fi
 
+      - name: Verify the endpoint declarations were audited
+        run: |
+          # A clean audit proves nothing if the endpoint itself is missing
+          # from it, so require each load-bearing declaration by name.
+          required="
+          LogConcavity.theorem1_log_concave
+          LogConcavity.theorem1_witness
+          LogConcavity.theorem1_modulo_Stanley
+          LogConcavity.theorem1_modulo_Stanley_of_lastBetti
+          LogConcavity.card_beta₃_eq_one
+          LogConcavity.card_beta₃_ofLevel_eq_one
+          LogConcavity.isTypeTwoLevel_witness
+          Hilberts_Syzygy
+          "
+          missing=0
+          for decl in $required; do
+            if grep -qF "'$decl' depends on axioms:" axiom-audit.log; then
+              echo "audited: $decl"
+            else
+              echo "::error::$decl is missing from the axiom audit"
+              missing=1
+            fi
+          done
+          test "$missing" -eq 0
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -89,3 +114,13 @@ jobs:
           path: |
             build.log
             axiom-audit.log
+
+  port-provenance:
+    name: FormalDeps port matches upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (clean)
+        uses: actions/checkout@v4
+
+      - name: Compare ported statements against the upstream commit
+        run: sh FormalDeps/verify-port.sh
