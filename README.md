@@ -150,11 +150,32 @@ for an arbitrary `R3 k`-module `M`, with `ker d₃` the socle `(0 :_M m)`. Over
 `R3 k` itself the complex is proved exact (`d₃_injective`,
 `ker_d₂_eq_range_d₃`, `ker_d₁_eq_range_d₂`), and exactness is transferred
 coordinatewise to free modules `ι → R3 k` (`…_pi` variants), so the Koszul
-homology of a free module vanishes in positive degrees. What remains for
-`hBetti` is the long exact sequence argument that walks this vanishing up the
-three syzygies of the minimal resolution, turning `Soc(M) = H₃(K ⊗ M)` into
-`F₃ ⊗ k`. Those results are audited too, and depend only on the three
-standard axioms.
+homology of a free module vanishes in positive degrees.
+
+[`KoszulHomology.lean`](KoszulHomology.lean) then walks that vanishing up the
+syzygies. For a submodule `A ≤ B` with `B` Koszul-acyclic it proves the three
+connecting isomorphisms
+
+```
+Soc (B ⧸ A) ≅ H₂ A,    H₂ (B ⧸ A) ≅ H₁ A,    H₁ (B ⧸ A) ≅ H₀ A = A ⧸ m A
+```
+
+(the last one when `A ≤ m B`, i.e. minimality), each built by hand as an
+explicit linear equivalence rather than via a general long exact sequence,
+together with the transport of Koszul homology along an isomorphism. Chaining
+them gives `socleEquivH₀OfResolution`: for an exact
+`F₃ → F₂ → F₁ → F₀ → M → 0` with `F₀, F₁, F₂` free, `δ₃` injective and
+minimal,
+
+```
+Soc M ≅ F₃ ⧸ m F₃,
+```
+
+which is exactly "the last Betti number is the type of `M`". What remains for
+`hBetti` is to instantiate this at `GradedMinimalFreeComplex.ofLevel hA` and
+to identify `F₃ ⧸ m F₃` with `k^{β₃}`, then combine with the socle
+computation `matlisDualSocle_finrank = 1`. All of these results are audited
+too, and depend only on the three standard axioms.
 
 Everything that used to be assumed alongside it is now derived:
 

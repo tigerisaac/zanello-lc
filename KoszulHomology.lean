@@ -31,6 +31,17 @@ Each is built the same way: the connecting map is defined on a lift submodule
 of `B`, shown surjective using acyclicity of `B`, and its kernel is computed;
 the two presentations of that kernel are then glued with
 `quotKerEquivOfSurjective`.
+
+Homology transports along an isomorphism (`socleCongr`, `H₂Congr`, `H₁Congr`,
+`H₀Congr`), which lets the three steps be chained along a resolution, whose
+syzygies are only isomorphic to the relevant quotients.  The result is
+`socleEquivH₀OfResolution`: for an exact `F₃ → F₂ → F₁ → F₀ → M → 0` with
+`F₀, F₁, F₂` Koszul-acyclic (`Acyclic`, which free modules satisfy by
+`acyclic_pi`), `δ₃` injective and minimal,
+
+```
+Soc M ≅ F₃ ⧸ m F₃.
+```
 -/
 
 namespace LogConcavity
@@ -39,7 +50,7 @@ namespace Koszul
 
 noncomputable section
 
-universe u v
+universe u v w
 
 open MvPolynomial
 
@@ -637,6 +648,264 @@ def H₁_quotient_equiv_H₀ : H₁ k (B ⧸ A) ≃ₗ[R3 k] H₀ k A :=
 end Connecting₀
 
 
+/-! ## Transport along an isomorphism
+
+The three connecting isomorphisms above relate a submodule to an explicit
+quotient, whereas along a resolution the syzygies are only *isomorphic* to
+those quotients.  These lemmas move Koszul homology across an isomorphism so
+that the three steps can be chained. -/
+
+section Transport
+
+variable {k : Type u} [Field k] {M N : Type v} [AddCommGroup M] [Module (R3 k) M]
+  [AddCommGroup N] [Module (R3 k) N] (e : M ≃ₗ[R3 k] N)
+
+/-- The socle transports along an isomorphism. -/
+def socleCongr : LinearMap.ker (d₃ k M) ≃ₗ[R3 k] LinearMap.ker (d₃ k N) where
+  toFun m := ⟨e (m : M), by
+    rw [mem_ker_d₃_iff]
+    intro i
+    rw [← map_smul, (mem_ker_d₃_iff _).mp m.2 i, map_zero]⟩
+  invFun n := ⟨e.symm (n : N), by
+    rw [mem_ker_d₃_iff]
+    intro i
+    rw [← map_smul, (mem_ker_d₃_iff _).mp n.2 i, map_zero]⟩
+  map_add' m m' := Subtype.ext (map_add e _ _)
+  map_smul' c m := Subtype.ext (map_smul e _ _)
+  left_inv m := Subtype.ext (e.symm_apply_apply _)
+  right_inv n := Subtype.ext (e.apply_symm_apply _)
+
+/-! ### Degree two -/
+
+lemma map_mem_cycles₂ {g : Fin 3 → M} (hg : g ∈ cycles₂ k M) :
+    (fun i => e (g i)) ∈ cycles₂ k N := by
+  rw [mem_cycles₂]
+  funext i
+  have h : e (d₂ k M g i) = d₂ k N (fun j => e (g j)) i := map_d₂ (e : M →ₗ[R3 k] N) g i
+  rw [← h, show d₂ k M g = 0 from mem_cycles₂.mp hg]
+  simp
+
+/-- Transport of degree-two cycles into the homology of the target. -/
+def toH₂Congr : cycles₂ k M →ₗ[R3 k] H₂ k N where
+  toFun g := Submodule.Quotient.mk
+    ⟨fun i => e ((g : Fin 3 → M) i), map_mem_cycles₂ e g.2⟩
+  map_add' g g' := by
+    rw [← Submodule.Quotient.mk_add]
+    exact congrArg _ (Subtype.ext (funext fun i => map_add e _ _))
+  map_smul' c g := by
+    rw [RingHom.id_apply, ← Submodule.Quotient.mk_smul]
+    exact congrArg _ (Subtype.ext (funext fun i => map_smul e _ _))
+
+lemma toH₂Congr_apply (g : cycles₂ k M) :
+    toH₂Congr e g = Submodule.Quotient.mk
+      ⟨fun i => e ((g : Fin 3 → M) i), map_mem_cycles₂ e g.2⟩ :=
+  rfl
+
+lemma toH₂Congr_surjective : Function.Surjective (toH₂Congr e) := by
+  intro y
+  obtain ⟨γ, rfl⟩ := Submodule.Quotient.mk_surjective _ y
+  have hmem : (fun i => e.symm ((γ : Fin 3 → N) i)) ∈ cycles₂ k M :=
+    map_mem_cycles₂ e.symm γ.2
+  refine ⟨⟨_, hmem⟩, ?_⟩
+  rw [toH₂Congr_apply]
+  exact congrArg _ (Subtype.ext (funext fun i => e.apply_symm_apply _))
+
+lemma ker_toH₂Congr : LinearMap.ker (toH₂Congr e) = boundaries₂ k M := by
+  ext g
+  simp only [LinearMap.mem_ker, toH₂Congr_apply, Submodule.Quotient.mk_eq_zero]
+  constructor
+  · rintro ⟨n, hn⟩
+    refine ⟨e.symm n, ?_⟩
+    funext i
+    have h : e.symm (d₃ k N n i) = d₃ k M (e.symm n) i := map_d₃ (e.symm : N →ₗ[R3 k] M) n i
+    rw [← h, show d₃ k N n i = e ((g : Fin 3 → M) i) from congrFun hn i,
+      e.symm_apply_apply]
+    rfl
+  · rintro ⟨m, hm⟩
+    refine ⟨e m, ?_⟩
+    funext i
+    have h : e (d₃ k M m i) = d₃ k N (e m) i := map_d₃ (e : M →ₗ[R3 k] N) m i
+    rw [← h, show d₃ k M m i = (g : Fin 3 → M) i from congrFun hm i]
+    rfl
+
+/-- Degree-two Koszul homology transports along an isomorphism. -/
+def H₂Congr : H₂ k M ≃ₗ[R3 k] H₂ k N :=
+  (Submodule.quotEquivOfEq _ _ (ker_toH₂Congr e).symm).trans
+    (LinearMap.quotKerEquivOfSurjective (toH₂Congr e) (toH₂Congr_surjective e))
+
+/-! ### Degree one -/
+
+lemma map_mem_cycles₁ {g : Fin 3 → M} (hg : g ∈ cycles₁ k M) :
+    (fun i => e (g i)) ∈ cycles₁ k N := by
+  apply LinearMap.mem_ker.mpr
+  have h : e (d₁ k M g) = d₁ k N (fun j => e (g j)) := map_d₁ (e : M →ₗ[R3 k] N) g
+  rw [← h, show d₁ k M g = 0 from LinearMap.mem_ker.mp hg]
+  simp
+
+/-- Transport of degree-one cycles into the homology of the target. -/
+def toH₁Congr : cycles₁ k M →ₗ[R3 k] H₁ k N where
+  toFun g := Submodule.Quotient.mk
+    ⟨fun i => e ((g : Fin 3 → M) i), map_mem_cycles₁ e g.2⟩
+  map_add' g g' := by
+    rw [← Submodule.Quotient.mk_add]
+    exact congrArg _ (Subtype.ext (funext fun i => map_add e _ _))
+  map_smul' c g := by
+    rw [RingHom.id_apply, ← Submodule.Quotient.mk_smul]
+    exact congrArg _ (Subtype.ext (funext fun i => map_smul e _ _))
+
+lemma toH₁Congr_apply (g : cycles₁ k M) :
+    toH₁Congr e g = Submodule.Quotient.mk
+      ⟨fun i => e ((g : Fin 3 → M) i), map_mem_cycles₁ e g.2⟩ :=
+  rfl
+
+lemma toH₁Congr_surjective : Function.Surjective (toH₁Congr e) := by
+  intro y
+  obtain ⟨γ, rfl⟩ := Submodule.Quotient.mk_surjective _ y
+  have hmem : (fun i => e.symm ((γ : Fin 3 → N) i)) ∈ cycles₁ k M :=
+    map_mem_cycles₁ e.symm γ.2
+  refine ⟨⟨_, hmem⟩, ?_⟩
+  rw [toH₁Congr_apply]
+  exact congrArg _ (Subtype.ext (funext fun i => e.apply_symm_apply _))
+
+lemma ker_toH₁Congr : LinearMap.ker (toH₁Congr e) = boundaries₁ k M := by
+  ext g
+  simp only [LinearMap.mem_ker, toH₁Congr_apply, Submodule.Quotient.mk_eq_zero]
+  constructor
+  · rintro ⟨n, hn⟩
+    refine ⟨fun i => e.symm (n i), ?_⟩
+    funext i
+    have h : e.symm (d₂ k N n i) = d₂ k M (fun j => e.symm (n j)) i :=
+      map_d₂ (e.symm : N →ₗ[R3 k] M) n i
+    rw [← h, show d₂ k N n i = e ((g : Fin 3 → M) i) from congrFun hn i,
+      e.symm_apply_apply]
+    rfl
+  · rintro ⟨m, hm⟩
+    refine ⟨fun i => e (m i), ?_⟩
+    funext i
+    have h : e (d₂ k M m i) = d₂ k N (fun j => e (m j)) i :=
+      map_d₂ (e : M →ₗ[R3 k] N) m i
+    rw [← h, show d₂ k M m i = (g : Fin 3 → M) i from congrFun hm i]
+    rfl
+
+/-- Degree-one Koszul homology transports along an isomorphism. -/
+def H₁Congr : H₁ k M ≃ₗ[R3 k] H₁ k N :=
+  (Submodule.quotEquivOfEq _ _ (ker_toH₁Congr e).symm).trans
+    (LinearMap.quotKerEquivOfSurjective (toH₁Congr e) (toH₁Congr_surjective e))
+
+/-! ### Degree zero -/
+
+/-- Transport into degree-zero homology of the target. -/
+def toH₀Congr : M →ₗ[R3 k] H₀ k N where
+  toFun m := Submodule.Quotient.mk (e m)
+  map_add' m m' := by rw [← Submodule.Quotient.mk_add]; exact congrArg _ (map_add e _ _)
+  map_smul' c m := by
+    rw [RingHom.id_apply, ← Submodule.Quotient.mk_smul]
+    exact congrArg _ (map_smul e _ _)
+
+lemma toH₀Congr_apply (m : M) : toH₀Congr e m = Submodule.Quotient.mk (e m) := rfl
+
+lemma toH₀Congr_surjective : Function.Surjective (toH₀Congr e) := by
+  intro y
+  obtain ⟨n, rfl⟩ := Submodule.Quotient.mk_surjective _ y
+  exact ⟨e.symm n, congrArg _ (e.apply_symm_apply n)⟩
+
+lemma ker_toH₀Congr : LinearMap.ker (toH₀Congr e) = LinearMap.range (d₁ k M) := by
+  ext m
+  simp only [LinearMap.mem_ker, toH₀Congr_apply, Submodule.Quotient.mk_eq_zero]
+  constructor
+  · rintro ⟨g, hg⟩
+    refine ⟨fun i => e.symm (g i), ?_⟩
+    have h : e.symm (d₁ k N g) = d₁ k M (fun j => e.symm (g j)) :=
+      map_d₁ (e.symm : N →ₗ[R3 k] M) g
+    rw [← h, hg, e.symm_apply_apply]
+  · rintro ⟨g, hg⟩
+    refine ⟨fun i => e (g i), ?_⟩
+    have h : e (d₁ k M g) = d₁ k N (fun j => e (g j)) := map_d₁ (e : M →ₗ[R3 k] N) g
+    rw [← h, hg]
+
+/-- Degree-zero Koszul homology transports along an isomorphism. -/
+def H₀Congr : H₀ k M ≃ₗ[R3 k] H₀ k N :=
+  (Submodule.quotEquivOfEq _ _ (ker_toH₀Congr e).symm).trans
+    (LinearMap.quotKerEquivOfSurjective (toH₀Congr e) (toH₀Congr_surjective e))
+
+end Transport
+
+
+/-! ## The chain along a minimal free resolution
+
+Putting the three connecting isomorphisms and the transports together: for a
+length-three resolution of `M` by Koszul-acyclic modules whose last
+differential is minimal, the socle of `M` is `F₃ ⧸ m F₃`. -/
+
+section Resolution
+
+/-- Koszul-acyclicity in positive degrees.  Free modules have it, by
+`Koszul.d₃_pi_injective`, `Koszul.ker_d₂_eq_range_d₃_pi` and
+`Koszul.ker_d₁_eq_range_d₂_pi`. -/
+structure Acyclic (k : Type u) [Field k] (F : Type v) [AddCommGroup F]
+    [Module (R3 k) F] : Prop where
+  d₃_injective : Function.Injective (d₃ k F)
+  exact₂ : LinearMap.ker (d₂ k F) = LinearMap.range (d₃ k F)
+  exact₁ : LinearMap.ker (d₁ k F) = LinearMap.range (d₂ k F)
+
+lemma acyclic_pi {k : Type u} [Field k] {ι : Type w} : Acyclic k (ι → R3 k) :=
+  { d₃_injective := d₃_pi_injective
+    exact₂ := ker_d₂_eq_range_d₃_pi
+    exact₁ := ker_d₁_eq_range_d₂_pi }
+
+variable {k : Type u} [Field k] {F₀ F₁ F₂ F₃ M : Type v}
+  [AddCommGroup F₀] [Module (R3 k) F₀] [AddCommGroup F₁] [Module (R3 k) F₁]
+  [AddCommGroup F₂] [Module (R3 k) F₂] [AddCommGroup F₃] [Module (R3 k) F₃]
+  [AddCommGroup M] [Module (R3 k) M]
+
+/-- **The socle of a resolved module is the top of its resolution.**  Given an
+exact sequence `F₃ → F₂ → F₁ → F₀ → M → 0` with `F₀`, `F₁`, `F₂`
+Koszul-acyclic (e.g. free), `δ₃` injective, and the last differential minimal
+in the sense that its image lies in `m F₂`, the socle of `M` is `F₃ ⧸ m F₃`.
+
+For a minimal free resolution the right-hand side is `k^{β₃}`, so this is the
+statement that the last Betti number is the type of `M`. -/
+def socleEquivH₀OfResolution
+    (δ₁ : F₁ →ₗ[R3 k] F₀) (δ₂ : F₂ →ₗ[R3 k] F₁) (δ₃ : F₃ →ₗ[R3 k] F₂)
+    (p : F₀ →ₗ[R3 k] M) (hp : Function.Surjective p)
+    (hZ₁ : LinearMap.ker p = LinearMap.range δ₁)
+    (hZ₂ : LinearMap.ker δ₁ = LinearMap.range δ₂)
+    (hZ₃ : LinearMap.ker δ₂ = LinearMap.range δ₃)
+    (hδ₃ : Function.Injective δ₃)
+    (hmin : LinearMap.range δ₃ ≤ LinearMap.range (d₁ k F₂))
+    (hF₀ : Acyclic k F₀) (hF₁ : Acyclic k F₁) (hF₂ : Acyclic k F₂) :
+    LinearMap.ker (d₃ k M) ≃ₗ[R3 k] H₀ k F₃ := by
+  -- `M ≅ F₀ ⧸ im δ₁`, so the socle of `M` is `H₂` of the first syzygy
+  have e₀ : M ≃ₗ[R3 k] F₀ ⧸ LinearMap.range δ₁ :=
+    (LinearMap.quotKerEquivOfSurjective p hp).symm.trans
+      (Submodule.quotEquivOfEq _ _ hZ₁)
+  have s₁ : LinearMap.ker (d₃ k M) ≃ₗ[R3 k]
+      LinearMap.ker (d₃ k (F₀ ⧸ LinearMap.range δ₁)) := socleCongr e₀
+  have s₂ : LinearMap.ker (d₃ k (F₀ ⧸ LinearMap.range δ₁)) ≃ₗ[R3 k]
+      H₂ k (LinearMap.range δ₁) :=
+    socle_quotient_equiv_H₂ (LinearMap.range δ₁) hF₀.d₃_injective hF₀.exact₂
+  -- `im δ₁ ≅ F₁ ⧸ im δ₂`, so that `H₂` becomes `H₁` of the second syzygy
+  have e₁ : (LinearMap.range δ₁) ≃ₗ[R3 k] F₁ ⧸ LinearMap.range δ₂ :=
+    (LinearMap.quotKerEquivRange δ₁).symm.trans (Submodule.quotEquivOfEq _ _ hZ₂)
+  have s₃ : H₂ k (LinearMap.range δ₁) ≃ₗ[R3 k] H₂ k (F₁ ⧸ LinearMap.range δ₂) :=
+    H₂Congr e₁
+  have s₄ : H₂ k (F₁ ⧸ LinearMap.range δ₂) ≃ₗ[R3 k] H₁ k (LinearMap.range δ₂) :=
+    H₂_quotient_equiv_H₁ (LinearMap.range δ₂) hF₁.exact₂ hF₁.exact₁
+  -- `im δ₂ ≅ F₂ ⧸ im δ₃`, so that `H₁` becomes `H₀` of the last syzygy
+  have e₂ : (LinearMap.range δ₂) ≃ₗ[R3 k] F₂ ⧸ LinearMap.range δ₃ :=
+    (LinearMap.quotKerEquivRange δ₂).symm.trans (Submodule.quotEquivOfEq _ _ hZ₃)
+  have s₅ : H₁ k (LinearMap.range δ₂) ≃ₗ[R3 k] H₁ k (F₂ ⧸ LinearMap.range δ₃) :=
+    H₁Congr e₂
+  have s₆ : H₁ k (F₂ ⧸ LinearMap.range δ₃) ≃ₗ[R3 k] H₀ k (LinearMap.range δ₃) :=
+    H₁_quotient_equiv_H₀ (LinearMap.range δ₃) hF₂.exact₁ hmin
+  -- and `im δ₃ ≅ F₃`
+  have s₇ : H₀ k (LinearMap.range δ₃) ≃ₗ[R3 k] H₀ k F₃ :=
+    H₀Congr (LinearEquiv.ofInjective δ₃ hδ₃).symm
+  exact s₁.trans (s₂.trans (s₃.trans (s₄.trans (s₅.trans (s₆.trans s₇)))))
+
+end Resolution
+
+
 end
 
 end Koszul
@@ -654,3 +923,9 @@ end LogConcavity
 #print axioms LogConcavity.Koszul.toH₀_surjective
 #print axioms LogConcavity.Koszul.ker_toH₁Quot_eq_ker_toH₀
 #print axioms LogConcavity.Koszul.H₁_quotient_equiv_H₀
+#print axioms LogConcavity.Koszul.socleCongr
+#print axioms LogConcavity.Koszul.H₂Congr
+#print axioms LogConcavity.Koszul.H₁Congr
+#print axioms LogConcavity.Koszul.H₀Congr
+#print axioms LogConcavity.Koszul.acyclic_pi
+#print axioms LogConcavity.Koszul.socleEquivH₀OfResolution
