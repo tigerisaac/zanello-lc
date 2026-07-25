@@ -171,7 +171,11 @@ minimal,
 Soc M ≅ F₃ ⧸ m F₃,
 ```
 
-which is exactly "the last Betti number is the type of `M`". What remains for
+which is exactly "the last Betti number is the type of `M`". The hypotheses
+are not vacuous: `koszulResolutionWitness` instantiates the theorem at the
+Koszul complex itself, which is a minimal free resolution of `k = R3 k ⧸ m`,
+and `nontrivial_H₀_self` shows the resulting conclusion is about nonzero
+modules. What remains for
 `hBetti` is to instantiate this at `GradedMinimalFreeComplex.ofLevel hA` and
 to identify `F₃ ⧸ m F₃` with `k^{β₃}`, then combine with the socle
 computation `matlisDualSocle_finrank = 1`. All of these results are audited

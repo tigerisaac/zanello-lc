@@ -906,6 +906,55 @@ def socleEquivH₀OfResolution
 end Resolution
 
 
+/-! ## Non-vacuity
+
+The hypotheses of `socleEquivH₀OfResolution` are simultaneously satisfiable:
+the Koszul complex is itself a minimal free resolution, of `k = R3 k ⧸ m`.
+Instantiating the theorem there reads `Soc (R3 k ⧸ m) ≅ R3 k ⧸ m`, and both
+sides are nonzero, so neither the hypotheses nor the conclusion are vacuous. -/
+
+section Witness
+
+variable {k : Type u} [Field k]
+
+lemma acyclic_self : Acyclic k (R3 k) :=
+  { d₃_injective := d₃_injective
+    exact₂ := ker_d₂_eq_range_d₃
+    exact₁ := ker_d₁_eq_range_d₂ }
+
+/-- Minimality of the last Koszul differential: its image lies in `m F₂`. -/
+lemma range_d₃_le_range_d₁_pi :
+    LinearMap.range (d₃ k (R3 k)) ≤ LinearMap.range (d₁ k (Fin 3 → R3 k)) := by
+  rintro _ ⟨h, rfl⟩
+  refine ⟨fun i => Pi.single i h, ?_⟩
+  funext j
+  rw [d₁_apply]
+  simp only [Pi.add_apply, Pi.smul_apply, Pi.single_apply, smul_eq_mul, d₃_apply]
+  fin_cases j <;> simp
+
+/-- The degree-zero Koszul homology of `R3 k` is `k`, in particular nonzero. -/
+lemma nontrivial_H₀_self : Nontrivial (H₀ k (R3 k)) := by
+  refine Submodule.Quotient.nontrivial_iff.mpr ?_
+  intro htop
+  have hone : (1 : R3 k) ∈ LinearMap.range (d₁ k (R3 k)) := htop ▸ Submodule.mem_top
+  obtain ⟨f, hf⟩ := hone
+  have := congrArg MvPolynomial.constantCoeff hf
+  rw [d₁_apply] at this
+  simp at this
+
+/-- **Non-vacuity witness.**  The Koszul complex `R3 k → (Fin 3 → R3 k) →
+(Fin 3 → R3 k) → R3 k` is a minimal free resolution of `R3 k ⧸ m`, so every
+hypothesis of `socleEquivH₀OfResolution` holds at once. -/
+def koszulResolutionWitness :
+    LinearMap.ker (d₃ k (R3 k ⧸ LinearMap.range (d₁ k (R3 k)))) ≃ₗ[R3 k] H₀ k (R3 k) :=
+  socleEquivH₀OfResolution (d₁ k (R3 k)) (d₂ k (R3 k)) (d₃ k (R3 k))
+    (LinearMap.range (d₁ k (R3 k))).mkQ (Submodule.mkQ_surjective _)
+    (Submodule.ker_mkQ _) ker_d₁_eq_range_d₂ ker_d₂_eq_range_d₃ d₃_injective
+    range_d₃_le_range_d₁_pi acyclic_self acyclic_pi acyclic_pi
+
+end Witness
+
+
 end
 
 end Koszul
@@ -929,3 +978,5 @@ end LogConcavity
 #print axioms LogConcavity.Koszul.H₀Congr
 #print axioms LogConcavity.Koszul.acyclic_pi
 #print axioms LogConcavity.Koszul.socleEquivH₀OfResolution
+#print axioms LogConcavity.Koszul.nontrivial_H₀_self
+#print axioms LogConcavity.Koszul.koszulResolutionWitness
