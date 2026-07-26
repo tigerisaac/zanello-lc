@@ -7,8 +7,14 @@ what was checked independently of the build.
 The object of verification is
 [`paper/type2-log-concavity.pdf`](paper/type2-log-concavity.pdf), *Log-concavity
 of codimension-three level Hilbert functions of type two*, whose Theorem 1 is
-the case `(r, t) = (3, 2)` recorded as open in
+the case `(r, t) = (3, 2)` of Zanello's **question 1** (level Hilbert
+functions), recorded as open in
 [arXiv:2210.09447](https://arxiv.org/abs/2210.09447).
+
+Zanello's **question 2** — pure O-sequences, i.e. the *monomial* case — was
+settled for `(3,2)` in [arXiv:2605.22763](https://arxiv.org/abs/2605.22763)
+(May 2026) by a combinatorial argument. That is a special case of what is
+verified here; `README.md` sets out the relationship.
 
 ## 1. Environment
 
