@@ -16,6 +16,29 @@ negatively **except** `(3,2)`, which
 characteristic. The paper formalized here proves that case, assuming only
 Stanley's theorem on codimension-three Gorenstein Hilbert functions.
 
+### Relation to concurrent work on pure O-sequences
+
+Zanello's note asks two questions. Question 1 is about **level Hilbert
+functions** — the Hilbert functions of *all* standard graded Artinian level
+algebras of codimension `r` and type `t`. Question 2 is about **pure
+O-sequences** — equivalently, the Hilbert functions of *monomial* Artinian
+level algebras. `(3,2)` was the principal open case of both.
+
+Question 2 for `(3,2)` was settled in May 2026 by Google DeepMind's
+AlphaProof/Nexus agent, reported as "Every pure `O`-sequence of codimension 3
+and type 2 is log-concave" in
+[arXiv:2605.22763](https://arxiv.org/abs/2605.22763); the proof there is
+combinatorial, counting monomials below the two maximal monomials of a pure
+order ideal in `ℕ³`.
+
+The theorem formalized here is **question 1**: every codimension-three
+type-two level algebra over any field, monomial or not. It is strictly more
+general, and it implies the pure O-sequence statement whenever the order
+ideal genuinely uses all three variables — the degenerate cases fall under
+Iarrobino's settled `r ≤ 2`. The proof is correspondingly different: minimal
+free resolutions, graded Matlis duality and Stanley's theorem rather than
+monomial counting.
+
 **Start here:** [`Statement.lean`](Statement.lean) restates every definition
 the theorem depends on, names the assumption, gives the endpoint, runs it on
 an explicit algebra, and prints the axiom audit — in about 200 lines, with no
