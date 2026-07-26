@@ -1,4 +1,4 @@
-import Scratch
+import InverseSystem
 import FormalDepsBridge
 
 open scoped BigOperators
@@ -42,7 +42,7 @@ theorem r3_projectiveDimensionLE [Small.{v, uk} k]
 
 /-!
 This module is the executable home of the graded resolution construction.
-`Scratch.lean` contains the low-level component and inverse-system lemmas;
+`InverseSystem.lean` contains the low-level component and inverse-system lemmas;
 the declarations below package those maps as a genuine homogeneous complex
 so that later homological arguments can consume one object rather than a
 collection of unrelated witnesses.
@@ -414,7 +414,7 @@ structure GradedMinimalFreeComplex (I : Ideal (R3 k)) (e : ℕ)
   d₃_minimal : ∀ a g, d₃ (Pi.single a 1) g ∈ irrelevantIdeal k
 
 /-! The first reduction is performed on the already homogeneous family from
-`Scratch`: only its index set is thinned, so no degree information is lost. -/
+`InverseSystem`: only its index set is thinned, so no degree information is lost. -/
 
 noncomputable def minimalFirstRelations {I : Ideal (R3 k)} {e : ℕ}
     (hA : IsTypeTwoLevel I e) : HomogeneousFirstRelations hA := by
@@ -630,7 +630,7 @@ noncomputable def minimalThirdRelationsFin
       _ = LinearMap.ker S.d₂ := F.span_eq
 
 /-! The third family needs the same shifted homogeneous decomposition that
-`Scratch` supplies for the first two families.  It is used only to turn an
+`InverseSystem` supplies for the first two families.  It is used only to turn an
 arbitrary relation into a degree-zero relation, where minimality detects a
 unit coefficient. -/
 

@@ -1,245 +1,185 @@
 # Lean verification: Log-concavity of codimension-three level Hilbert functions of type two
 
-A Lean 4 + Mathlib formalization of the proof of:
+A Lean 4 + Mathlib formalization of the paper
+[`paper/type2-log-concavity.pdf`](paper/type2-log-concavity.pdf):
 
 > **Theorem 1.** Let `A = R/I` (`R = k[x₁,x₂,x₃]`, `k` any field) be a standard
 > graded Artinian level algebra of embedding dimension three, socle degree `e`,
 > and type two. Then its Hilbert function is log-concave:
 > `hᵢ² ≥ h_{i-1} h_{i+1}` for `1 ≤ i ≤ e−1`.
 
-The main numerical development is in [`LogConcavity.lean`](LogConcavity.lean).
-[`GradedResolution.lean`](GradedResolution.lean) contains the explicit
-finite-basis/shifted-complex, graded Nakayama, localized Euler, and graded
-Matlis interfaces; [`Scratch.lean`](Scratch.lean) contains the low-level
-homogeneous and inverse-system constructions. Dependencies are pinned by
-`lean-toolchain` and `lake-manifest.json`.
+This is the case `(r, t) = (3, 2)` of the log-concavity question for level
+Hilbert functions. Iarrobino settled `r = 2` (any `t`) and `(3,1)`
+positively and `(4,1)` negatively; Zanello settled all remaining pairs
+negatively **except** `(3,2)`, which
+[arXiv:2210.09447](https://arxiv.org/abs/2210.09447) records as open in every
+characteristic. The paper formalized here proves that case, assuming only
+Stanley's theorem on codimension-three Gorenstein Hilbert functions.
+
+**Start here:** [`Statement.lean`](Statement.lean) restates every definition
+the theorem depends on, names the assumption, gives the endpoint, runs it on
+an explicit algebra, and prints the axiom audit — in about 200 lines, with no
+proofs to read. Everything else in the repository exists to prove that one
+statement.
+
+## What is proved, and what is assumed
+
+```lean
+theorem theorem1_log_concave
+    (e : ℕ) (I : Ideal (R3 k)) (hA : IsTypeTwoLevel I e)
+    (hStanley : StanleyLemma1 k) :
+    ∀ i : ℤ, 1 ≤ i → i ≤ (e : ℤ) - 1 →
+      hilb I (i - 1) * hilb I (i + 1) ≤ hilb I i ^ 2
+```
+
+`hA` is the algebra of the theorem and `hilb I` is its honest Hilbert
+function (`dim_k` of the image of `Rₜ` in `A`). There is no hypothesis on the
+characteristic or the cardinality of `k`, and no numerical data about a
+resolution is assumed.
+
+`StanleyLemma1 k` is the paper's Lemma 1 and the **only** input the
+development does not prove:
+
+```lean
+def StanleyLemma1 (k : Type u) [Field k] : Prop :=
+  ∀ B E, GorensteinQuotientHF k B E →
+    ∀ i j : ℤ, 0 ≤ j → j ≤ i → 2 * i ≤ E → B j ≤ B i
+```
+
+— the Hilbert function of a standard graded Artinian Gorenstein algebra of
+embedding dimension at most three and socle degree `E` is nondecreasing
+through degree `⌊E/2⌋` (for integers, `i ≤ ⌊E/2⌋` is `2*i ≤ E`). Sources:
+
+* R. P. Stanley, *Hilbert functions of graded algebras*, Adv. Math. 28 (1978),
+  57–83 — the codimension-three Gorenstein case, via the Buchsbaum–Eisenbud
+  structure theorem;
+* F. Zanello, *Stanley's theorem on codimension 3 Gorenstein h-vectors*,
+  Proc. Amer. Math. Soc. 134 (2006), 5–8,
+  [arXiv:math/0411231](https://arxiv.org/abs/math/0411231) — the
+  characteristic-free proof cited by the paper.
+
+Two points about the exact form assumed. First, only *monotonicity* is
+assumed, not the full SI-sequence conclusion — the weakest form the proof
+uses. Second, it is assumed over the given field with no infiniteness
+hypothesis, matching the paper's "the result holds over an arbitrary field";
+arguments through a general linear form are normally written over an infinite
+field, and the reduction is standard and lossless, since for `k ⊆ k'` the
+algebra `A ⊗_k k'` has the same Hilbert function and the same socle
+dimension, so Gorenstein-ness, socle degree and Hilbert function all survive
+base change to an infinite extension. `Statement.lean` records both remarks
+next to the definition.
+
+`GorensteinQuotientHF` is a concrete predicate — an actual homogeneous ideal
+`J ⊆ k[x₁,x₂,x₃]` with `B t = hilb J t` at every degree — not an
+uninterpreted predicate variable, so `StanleyLemma1` cannot be satisfied
+vacuously or by an unrelated function.
 
 ## Verification status
 
 `lake build` succeeds with **zero `sorry`**, and `#print axioms` reports only
 Lean's standard foundational axioms (`propext`, `Classical.choice`,
-`Quot.sound`) for every theorem — no hidden axioms.
+`Quot.sound`) for every audited theorem — no hidden axioms. CI rebuilds from
+a clean checkout and **fails** if the endpoint's audit line is missing or
+mentions anything else.
 
-## What is machine-checked
-
-The development derives Theorem 1 from the *primitive numerical shadows* of
-the paper's commutative algebra. Everything the paper does on pp. 2–4 —
-every identity, inequality, sum manipulation, and case split — is formally
-verified:
-
-| Paper step | Lean theorem |
-|---|---|
-| `2Nⱼ = (j+1)(j+2)`, Pascal recursion, strict monotonicity | `two_mul_N`, `N_succ`, `N_strictMono` |
-| First/second differences of `N` extended by zero | `Nz_diff`, `Nz_second_diff` |
-| ε=1 case: windows `(N_m, N_{m−1}, N_{m−2})` are log-concave | `binomial_window_log_concave`, `Nz_window` |
-| Hilbert-numerator computation `Δ²g_d = 2 + Q_d − P_{<d} − p_d` (from rank additivity of complex (1)) | `shiftSum_second_diff` + inside `deep_dispatch` |
-| Central estimate (4) from (3), and (5) ⇒ (6) (`p_d = 0`, `Δ²g_d = 1`) | inside `deep_dispatch` |
-| AM–GM step: `Δ² ≤ 0 ⇒ ac ≤ b²` | `amgm_log_concave` |
-| r=0 case: evaluation `g = (d(d−1), d(d+1), (d+1)(d+2)−p_d)` and margin `> 0` | `deep_dispatch`, `r_eq_zero_log_concave` |
-| Inequality (9): `2d ≤ e+2` from `N_{d−1} ≤ g_{d−1} ≤ N_{e−d+1}` | inside `deep_dispatch` |
-| `x = g_{d−1} − g_{d−2} = d + a + D ≥ d`, `g_{d−2} ≤ d(d−1)` (via (8), Stanley) | inside `deep_dispatch` |
-| r=1 failure margin `x² − y ≥ d > 0` | `r_eq_one_log_concave` |
-| Full scenario case analysis | `GoodTriple.log_concave`, `deep_dispatch` |
-| Reversal transfer `g → h` | `theorem1`, `theorem1_full` |
-
-In addition, the **structural layer** machine-checks the abstract algebra
-behind the imported hypotheses, in the exact form the paper uses it:
-
-| Paper step | Lean theorem |
-|---|---|
-| (2): 1-dim kernel spanned by a full-support vector ⇒ every proper subset of columns independent | `proper_subfamily_linearIndependent` |
-| (3): rank inequality `Q_d − ε_d ≤ P_{<d} − r_d` from the graded zero pattern of a minimal matrix | `rank_estimate`, `rank_estimate_graded` |
-| UFD lemma `(Kv) ∩ R² = Rv` for a primitive vector (Euclid's-lemma step) | `primitive_line_saturated`, `primitive_line_saturated_fraction` |
-| Passage from the low-shift image to `vJ`; truncated-kernel identity (7), `cv ∈ (vJ) ⟺ c ∈ J` | `line_factorization` |
-| Nonzero cyclic submodule of a finite-length module with simple socle ⇒ Artinian quotient with simple socle | `cyclic_submodule_simple_socle` |
-
-## The formal algebraic input and resolution bridge
-
-The **formal-algebra layer** defines the paper's actual starting object in
-Lean: `R = k[x₁,x₂,x₃]` with its monomial grading, a homogeneous ideal `I`,
-the graded quotient `A = R/I` with graded pieces `quotPiece I n` (images of
-`Rₙ`), its Hilbert function `hilb I : ℤ → ℤ`, its socle, and the predicate
-`IsTypeTwoLevel I e` — Artinian, embedding dimension three, socle
-concentrated in degree `e`, type two. Machine-checked from that object:
-
-| Statement | Lean theorem |
-|---|---|
-| `dim_k Rₙ = binom(n+2,2) = N n` (monomial basis, stars and bars) | `finrank_homogeneousSubmodule` |
-| `h_t ≥ 0` and `h_t ≤ N_t` — hypotheses `hnn`, `hquot` **derived** | `hilb_nonneg`, `hilb_le_Nz` |
-| Profile of the paper: `h₀ = 1`, `h₁ = 3`, `h_e = 2`, `h_t = 0` for `t > e` (socle = top piece), hence `2 ≤ e` | `hilb_zero`, `IsTypeTwoLevel.hilb_one`, `IsTypeTwoLevel.hilb_top`, `IsTypeTwoLevel.hilb_vanish`, `IsTypeTwoLevel.socle_eq`, `IsTypeTwoLevel.two_le_socleDegree` |
-| Gorenstein bounds — hypothesis `hGor` **derived** over the *concrete* predicate `GorensteinQuotientHF` (graded Artinian quotient of `R` with one-dimensional socle in degree `E`) | `GorensteinQuotientHF.bounds` |
-
-The new resolution bridge replaces the old arbitrary functions `g,p,q,r,ε`
-by proof-carrying algebraic data:
-
-| Checklist step | Lean object / theorem |
-|---|---|
-| finite Betti bases and genuine shift multiplicities | `GradedResolutionDuality`, `shiftMultiplicity`, `sum_shiftMultiplicity_Icc` |
-| the pieces `M_d = Hom_k(A_{e-d},k)` and `g_d=h_{e-d}` | `gradedDualPiece`, `reversedHilb`, `finrank_gradedDualPiece` |
-| Hilbert-series coefficients from actual degreewise exact maps (not a numerical field) | `ExactPresentation.finrank_add`, `GradedResolutionDuality.hilbert_series` |
-| localized low-shift matrices form a complex | `lowδ₂`, `lowδ₁`, `low_complex` |
-| `ε_d` and `r_d` are actual nullity/rank; `(3)` follows | `resolutionEpsilon`, `resolutionRank`, `rank_epsilon_cases`, `rank_inequality` |
-| properness gives the upper shift bound; homogeneous generators give no lower-degree ideal elements | `qShift_le_of_proper`, `ideal_no_low_degree` |
-| `ε_d=1` gives the full binomial window | `all_qShift_le_of_epsilon_one`, `epsilon_one_full_hilbert` |
-| `r_d=0` gives `P_{<d}=0` | `rank_zero_no_low_shifts` |
-| primitive line, coefficient ideal, and low annihilator chain | `CriticalBranchCertificate`, `line_coefficient_eq_annihilator_low` |
-| critical presentation dimension from a surjective map and its actual kernel | `SurjectivePresentation.finrank_add`, `CriticalBranchCertificate.presentation_dimension` |
-| actual Gorenstein annihilator quotient | `GorensteinAnnihilatorData.toGorensteinQuotientHF` |
-| degreewise ideal/quotient dimension split and equation (8) | `idealPiece_finrank_add_quotPiece`, `idealHilb_add_hilb`, `CriticalBranchCertificate.equation8` |
-
-The concrete graded-resolution module also proves the certificate-level
-consequences that were previously only described in the roadmap:
-
-| Resolution item | Lean object / theorem |
-|---|---|
-| finite homogeneous bases, shift multisets, and irrelevant-ideal minimality | `GradedMinimalFreeComplex`, `pMultiplicity`, `qMultiplicity`, `rMultiplicity`, `first_range_minimal`, `second_range_minimal`, `third_range_minimal` |
-| graded Nakayama for the displayed columns | `column_residue_independent_of_exact`, `firstNakayamaCertificate`, `secondNakayamaCertificate`, `thirdNakayamaCertificate` |
-| actual homogeneous minimal generators | `firstHomogeneousMinimalGenerators`, `secondHomogeneousMinimalGenerators`, `thirdHomogeneousMinimalGenerators` |
-| last-kernel freeness, Euler characteristic, and rank-one basis | `third_kernel_free`, `LocalizedThreeStepResolution.euler_characteristic`, `third_kernel_basis_fin_one_of_euler` |
-| Matlis components and their original Hilbert-function values | `GradedMatlisDualData.ofLevel`, `component_finrank_original_hilbert` |
-| full-support last-differential vector and its dependency | `lastDifferentialVector_full`, `lastDifferentialVector_dependency`, `proper_subfamily_delta₂` |
-
-`theorem1_of_resolution` feeds all of these derived facts into
-`theorem1_full`. Its user-visible mathematical inputs are the actual level
-algebra, a certified `GradedResolutionDuality`/`ResolutionPackage` pair,
-and Stanley's theorem. It no longer asks separately for `hrev`, `hres`, `hrε`, `h3`,
-`hε1`, `hr0`, `hr1`, or `hGor`.
-`theorem1_of_hasGradedResolutionPackage` bundles the whole non-Stanley input
-as the single named proposition `HasGradedResolutionPackage I e`.
-
-## Remaining trust boundary
-
-**Stanley's theorem is now the only assumed input.** In exact Lean terms the
-endpoint is `theorem1_modulo_Stanley` in [`BettiThree.lean`](BettiThree.lean):
-
-```lean
-theorem theorem1_modulo_Stanley
-    (e : ℕ) (I : Ideal (R3 k)) (hA : IsTypeTwoLevel I e)
-    (hStanley : ∀ B E, GorensteinQuotientHF k B E →
-      ∀ i j : ℤ, 0 ≤ j → j ≤ i → 2 * i ≤ E → B j ≤ B i) :
-    ∀ i : ℤ, 1 ≤ i → i ≤ (e : ℤ) - 1 →
-      hilb I (i - 1) * hilb I (i + 1) ≤ hilb I i ^ 2
-```
-
-`#print axioms` reports only `propext`, `Classical.choice`, `Quot.sound`. No
-`sorry`, custom axiom, or opaque numerical hypothesis hides the boundary, and
-`IsTypeTwoLevel` is not vacuous — [`Witness.lean`](Witness.lean) exhibits a
-concrete instance (see [Non-vacuity](#non-vacuity-a-concrete-instance)).
-
-Mathlib 4.31 has a generic functorial projective-resolution API, but no
-minimal **graded** free resolutions, no Koszul complex, and no graded
-Matlis-duality theory. The `FormalDeps/` directory supplies a machine-checked
-port of the homological prerequisites — Ischebeck's depth bound,
-Auslander–Buchsbaum, Cohen–Macaulay freeness, and **Hilbert's Syzygy
-Theorem** (`globalDimension (MvPolynomial (Fin n) k) = n`), all audited to
-depend only on Lean's three standard axioms (see `FormalDeps/README.md`).
-
-[`ModuloStanley.lean`](ModuloStanley.lean) builds the graded minimal free
-complex, the graded Matlis-annihilator Gorenstein property, and the entire
-resolution/duality package **from `IsTypeTwoLevel I e` alone**, except for a
-single homological fact about the resolved module: `hBetti`, that the third
-free module in the minimal graded resolution of the Matlis dual has rank one
-(equivalently `Tor₃(M, k) ≅ Soc(M)(-3)`). Its socle side was already proved
-there (`matlisDualSocle_finrank = 1`); the `Tor` side needed a Koszul complex
-on `(x₁, x₂, x₃)`, which Mathlib does not provide. The three files below
-supply it and close the gap.
-
-[`Koszul.lean`](Koszul.lean) builds the missing complex by hand:
-
-```
-0 → M → M³ → M³ → M → 0
-      d₃    d₂    d₁
-```
-
-for an arbitrary `R3 k`-module `M`, with `ker d₃` the socle `(0 :_M m)`. Over
-`R3 k` itself the complex is proved exact (`d₃_injective`,
-`ker_d₂_eq_range_d₃`, `ker_d₁_eq_range_d₂`), and exactness is transferred
-coordinatewise to free modules `ι → R3 k` (`…_pi` variants), so the Koszul
-homology of a free module vanishes in positive degrees.
-
-[`KoszulHomology.lean`](KoszulHomology.lean) then walks that vanishing up the
-syzygies. For a submodule `A ≤ B` with `B` Koszul-acyclic it proves the three
-connecting isomorphisms
-
-```
-Soc (B ⧸ A) ≅ H₂ A,    H₂ (B ⧸ A) ≅ H₁ A,    H₁ (B ⧸ A) ≅ H₀ A = A ⧸ m A
-```
-
-(the last one when `A ≤ m B`, i.e. minimality), each built by hand as an
-explicit linear equivalence rather than via a general long exact sequence,
-together with the transport of Koszul homology along an isomorphism. Chaining
-them gives `socleEquivH₀OfResolution`: for an exact
-`F₃ → F₂ → F₁ → F₀ → M → 0` with `F₀, F₁, F₂` free, `δ₃` injective and
-minimal,
-
-```
-Soc M ≅ F₃ ⧸ m F₃,
-```
-
-which is exactly "the last Betti number is the type of `M`". The hypotheses
-are not vacuous: `koszulResolutionWitness` instantiates the theorem at the
-Koszul complex itself, which is a minimal free resolution of `k = R3 k ⧸ m`,
-and `nontrivial_H₀_self` shows the resulting conclusion is about nonzero
-modules.
-
-[`BettiThree.lean`](BettiThree.lean) instantiates that chain at the minimal
-graded free complex of the Matlis dual. The complex is exact with `d₃`
-injective by construction, its free modules are Koszul-acyclic, and its
-minimality (`d₃_minimal`: the entries of `d₃` lie in the irrelevant ideal)
-gives the hypothesis `im δ₃ ≤ m F₂`. So
-
-```
-Soc (MatlisDual I) ≅ (β₃ → R) ⧸ m (β₃ → R),
-```
-
-and comparing `k`-dimensions — `1` on the left by `matlisDualSocle_finrank`,
-`Fintype.card β₃` on the right by `finrank_H₀Pi` — yields
-`card_beta₃_eq_one`, which is `hBetti`. Feeding it to
-`theorem1_modulo_Stanley_of_lastBetti` gives the endpoint above.
-
-Everything that used to be assumed alongside `hBetti` is derived too:
-
-| former input | now proved by |
-|---|---|
-| `rShift a₀ = e + 3` | `lastShift_eq_of_unique` — third difference of the degreewise Euler identity at `e+3`, plus `first_shift_le` |
-| every coordinate of `d₃` is nonzero | `lastDifferential_coordinate_ne_zero` — exactness of the dualized complex plus minimality of `d₂` |
-| `I = span (entries of d₃)` | `originalIdeal_le_coordinateIdeal` and `coordinateIdeal_le_originalIdeal` — projective null-homotopies on the complex and on its dual |
-| `β₂` nonempty | `beta₂_nonempty_of_beta₃` |
-| `β₃` has one element | `card_beta₃_eq_one` — the Koszul chain above |
-
-The legacy `theorem1_full` and `theorem1_of_level` are retained for
-compatibility and for the numerical consistency witness.
-
-A concrete instance of `IsTypeTwoLevel` is constructed in
-[`Witness.lean`](Witness.lean); see [Non-vacuity](#non-vacuity-a-concrete-instance)
-below.
-
-## Non-vacuity: a concrete instance
-
-Assumed hypotheses could in principle be mutually contradictory, or
-`IsTypeTwoLevel` could be unsatisfiable, making the theorem vacuous.
-[`Witness.lean`](Witness.lean) rules this out with an **actual algebra**, not
-just consistent numerical data: it constructs
-
-```
-J = (xy, xz, y², z², x³) ⊆ k[x,y,z]
-```
-
-(the inverse system `⟨X², YZ⟩`) and proves `isTypeTwoLevel_witness :
-IsTypeTwoLevel (witnessIdeal k) 2` — every field checked from the monomial
-generators, including `finrank (socle J) = 2` via an explicit basis
-`{x², yz}` of the socle. Feeding this instance through the repository's *own*
-`IsTypeTwoLevel`-derivations pins the Hilbert function to `(1, 3, 2)`
-(`witness_hilb_zero/one/two`) and yields the concrete inequality `h₀·h₂ = 2 ≤
-9 = h₁²` (`witness_log_concave`). `#print axioms` on each is clean. Because
-the derivations that compute `hilb J 1 = 3` and `hilb J 2 = 2` are the same
-lemmas the main theorem uses, this doubles as an end-to-end check of the
+`IsTypeTwoLevel` is not vacuous: [`Witness.lean`](Witness.lean) constructs
+`J = (xy, xz, y², z², x³)` (the inverse system `⟨X², YZ⟩`) and verifies every
+field of the structure from the monomial generators, including
+`finrank (socle J) = 2` via the explicit basis `{x², yz}`. Running the
+development's own derivations on it pins the Hilbert function to `(1, 3, 2)`
+and yields `h₀·h₂ = 2 ≤ 9 = h₁²` (`theorem1_witness`, `witness_log_concave`).
+Because the lemmas that compute `hilb J 1 = 3` and `hilb J 2 = 2` are the
+ones the main theorem uses, this doubles as an end-to-end check of the
 `hilb`/`socle`/`quotPiece` definitions against a case computable by hand.
 
-The legacy `NumericalConsistencyWitness` section additionally certifies, for
-the numerical data `F₁ = R(−1)³⊕R(−2)²`, `F₂ = R(−3)⁴`, `s = 5`, `r₂ = 2`,
-`ε₂ = 0`, that every hypothesis of the older `theorem1_full` is jointly
-satisfiable (`consistency_witness`).
+## Correspondence with the paper
+
+Every step of the proof on pp. 1–4 is machine-checked. The paper's own
+numbering is used throughout.
+
+| Paper | Lean |
+|---|---|
+| `N_j = binom(j+2,2)`, `N_j − N_{j−1} = j+1`, ratios `N_j/N_{j−1}` nonincreasing | `N`, `two_mul_N`, `Nz_diff`, `Nz_second_diff`, `binomial_window_log_concave` |
+| `s = e+3`; last free module of the resolution of `A` is `R(−s)²` | `lastShift_eq_of_unique`, `card_beta₃_eq_one` (**proved**, not assumed) |
+| Display (1): `0 → R(−s) → F₂ → F₁ → R² → M → 0`, `M` two-generated in degree 0, socle one-dimensional in degree `e` | `GradedMinimalFreeComplex`, `inverseSystemMap_surjective`, `matlisDualSocle_finrank` |
+| `M_d = Hom_k(A_{e−d}, k)`, `g_d = h_{e−d}` | `gradedDualPiece`, `reversedHilb`, `finrank_gradedDualPiece` |
+| (2): kernel of `δ₂` one-dimensional, spanning vector of full support ⇒ every proper subset of columns `K`-independent | `proper_subfamily_linearIndependent`, `lastDifferentialVector_full`, `proper_subfamily_delta₂` |
+| `Q_d`, `P_{<d}`, `r_d`, `ε_d` | `qMultiplicity`, `pMultiplicity`, `resolutionRank`, `resolutionEpsilon` |
+| (3): `Q_d − ε_d ≤ P_{<d} − r_d` | `rank_estimate_graded`, `rank_inequality` |
+| Hilbert numerator ⇒ `Δ²g_d = 2 + Q_d − P_{<d} − p_d` | `shiftSum_second_diff`, `GradedResolutionDuality.hilbert_series` |
+| (4) central estimate; AM–GM ⇒ (5) `Δ²g_d ≥ 1` at a putative failure | `amgm_log_concave`, inside `deep_dispatch` |
+| `ε_d = 1`: `I` has no element below degree `s−d`; triple is `(N_m, N_{m−1}, N_{m−2})`, `m = e−d+2` | `ideal_no_low_degree`, `all_qShift_le_of_epsilon_one`, `epsilon_one_full_hilbert`, `Nz_window` |
+| `r_d = 2` ⇒ `Δ²g_d ≤ 0`, contradiction | inside `deep_dispatch` |
+| `r_d = 0` ⇒ `Q_d = 0`, explicit values, margin `d(2(d+1)+(d−1)p_d) > 0` | `rank_zero_no_low_shifts`, `r_eq_zero_log_concave` |
+| `r_d = 1` ⇒ (6) `p_d = 0`, `Δ²g_d = 1` | inside `deep_dispatch` |
+| Primitive `v = (v₁,v₂)` of degree `a < d` spanning the line; low-shift columns generate `vJ` (Euclid's lemma, `R` a UFD) | `primitive_line_saturated`, `primitive_line_saturated_fraction`, `line_factorization`, `r3_primitive_pair_factorization` |
+| (7): `ker(R² → M)_t = (vJ)_t` for `t ≤ d` | `rank_one_critical_equation7`, `CriticalBranchCertificate.equation7` |
+| `H = 0` ⇒ `J = R`, `B ≡ 0`; `H ≠ 0` ⇒ `B = R/Ann(H)` Gorenstein of socle degree `E = e−a`, agreeing with `J` through degree `n = d−a` | `CriticalBranchCertificate.annihilator_case`, `cyclic_submodule_simple_socle`, `GorensteinAnnihilatorData.toGorensteinQuotientHF`, `low_piece_eq` |
+| (8): `g_t = 2N_t − N_{t−a} + B_{t−a}` for `t = d−2, d−1, d` | `CriticalBranchCertificate.equation8` |
+| (9): `2d ≤ e+2` from `N_{d−1} ≤ g_{d−1} ≤ N_{e−d+1}` | inside `deep_dispatch` |
+| `2(n−1) ≤ E`, Lemma 1 ⇒ `D = B_{n−1} − B_{n−2} ≥ 0` | inside `deep_dispatch` (the sole use of `hStanley`) |
+| `x = g_{d−1} − g_{d−2} = d + a + D ≥ d`, `g_{d−2} ≤ d(d−1)`, margin `x² − y ≥ d > 0` | `r_eq_one_log_concave` |
+| Full case analysis; reversal `g ↦ h` | `GoodTriple.log_concave`, `deep_dispatch`, `theorem1` |
+
+Type two is load-bearing exactly where the paper uses it: `M` is presented
+from `Fin 2 → R3 k` (`finrank_reversedMatlisPiece_zero = 2`, which consumes
+`type_two`), and the critical branch runs on a two-component primitive vector
+`IsRelPrime (v 0) (v 1)`. The machinery does not carry over to type three,
+where log-concavity is false.
+
+## Structure of the development
+
+| File | Contents |
+|---|---|
+| [`Statement.lean`](Statement.lean) | definitions, the assumption, the endpoint, the witness instance, the axiom audit — the reader's entry point |
+| [`LogConcavity.lean`](LogConcavity.lean) | the numerical layer (`N`, `Nz`, `GoodTriple`, `deep_dispatch`, `theorem1_full`), the formal algebra (`hilb`, `socle`, `IsTypeTwoLevel`, `GorensteinQuotientHF`), and the resolution-to-numerics bridge |
+| [`InverseSystem.lean`](InverseSystem.lean) | low-level homogeneous-component and inverse-system constructions, graded Matlis dual |
+| [`GradedResolution.lean`](GradedResolution.lean) | finite-basis/shifted complexes, graded Nakayama, localized Euler characteristic, graded Matlis interfaces |
+| [`ModuloStanley.lean`](ModuloStanley.lean) | builds the minimal graded free complex, the Matlis-annihilator Gorenstein property and the whole resolution/duality package from `IsTypeTwoLevel` alone |
+| [`Koszul.lean`](Koszul.lean), [`KoszulHomology.lean`](KoszulHomology.lean) | the Koszul complex on `(x₁,x₂,x₃)` and its connecting isomorphisms |
+| [`BettiThree.lean`](BettiThree.lean) | the last Betti number is one; `theorem1_modulo_Stanley` |
+| [`Witness.lean`](Witness.lean) | the concrete instance `(xy, xz, y², z², x³)` |
+| [`FormalDeps/`](FormalDeps/) | ported homological prerequisites (see below) |
+
+### How the resolution data is obtained
+
+The paper's display (1) is not assumed. `ModuloStanley.lean` constructs it
+from `IsTypeTwoLevel I e`: finite homogeneous bases with genuine shift
+multisets, minimality of every differential (entries in the irrelevant
+ideal), degreewise exact presentations, and the localized rank data. `ε_d`
+and `r_d` are an actual nullity and rank, not numerical parameters; `p` and
+`q` are cardinalities of shift fibres. The Hilbert-series identity is derived
+from the presentations by rank–nullity.
+
+The one homological fact that needed machinery Mathlib lacks is that the
+third free module has rank one — the `R(−s)` at the left of (1). Its socle
+side is `matlisDualSocle_finrank = 1`; the `Tor` side needs a Koszul complex
+on `(x₁,x₂,x₃)`, which `Koszul.lean` builds by hand and `KoszulHomology.lean`
+walks up the syzygies via three explicit connecting isomorphisms, giving
+`Soc M ≅ F₃ ⧸ m F₃`. Comparing dimensions in `BettiThree.lean` gives
+`card_beta₃_eq_one`. The hypotheses of that chain are not vacuous:
+`koszulResolutionWitness` instantiates it at the Koszul complex itself.
+
+Consequences that earlier drafts assumed alongside it are also derived:
+`rShift a₀ = e+3` (`lastShift_eq_of_unique`), every coordinate of `d₃`
+nonzero (`lastDifferential_coordinate_ne_zero`), `I = span (entries of d₃)`
+(`originalIdeal_le_coordinateIdeal`, `coordinateIdeal_le_originalIdeal`), and
+`β₂` nonempty (`beta₂_nonempty_of_beta₃`).
+
+### FormalDeps
+
+Mathlib 4.31 has a generic functorial projective-resolution API but no
+minimal **graded** free resolutions, no Koszul complex and no graded Matlis
+duality. [`FormalDeps/`](FormalDeps/) supplies the homological prerequisites
+— Ischebeck's depth bound, Auslander–Buchsbaum, Cohen–Macaulay freeness and
+**Hilbert's Syzygy Theorem**
+(`globalDimension (MvPolynomial (Fin n) k) = n`) — ported to this toolchain
+from the public Mathlib fork
+[`Thmoas-Guan/mathlib4_fork`](https://github.com/Thmoas-Guan/mathlib4_fork)
+@ `0ff6e01f56` (the Auslander–Buchsbaum–Serre criterion project by Nailin
+Guan et al., Apache-2.0). Those files keep their upstream names, headers and
+authorship; see [`FormalDeps/README.md`](FormalDeps/README.md) for provenance
+and how to diff them against the source commit.
 
 ## Reproducing
 
@@ -250,13 +190,19 @@ lake exe cache get   # fetch the prebuilt Mathlib binary cache
 lake build           # expect: Build completed successfully + axiom audit lines
 ```
 
-Setup: Lean `v4.31.0`, Mathlib `v4.31.0` (pinned in `lean-toolchain` /
-`lake-manifest.json`).
+Lean `v4.31.0`, Mathlib `v4.31.0`, pinned in `lean-toolchain` and
+`lake-manifest.json`.
 
-## Continuous integration
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs exactly this from
+a clean checkout on every push and pull request, records the full
+`#print axioms` audit in the job summary and as an artifact, and fails the
+build if any audited theorem depends on anything beyond Lean's three standard
+foundational axioms, or if any of the required endpoint declarations is
+missing from the audit.
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds the project
-with `lake build` from a clean checkout on every push and pull request,
-records the full `#print axioms` audit in the job summary and as an
-artifact, and **fails the build** if any audited theorem depends on
-anything beyond Lean's three standard foundational axioms.
+## Licence
+
+This repository is MIT-licensed (see [`LICENSE`](LICENSE)), **except** for
+the vendored files under [`FormalDeps/`](FormalDeps/), which are derived from
+Mathlib and its fork and remain under the Apache-2.0 licence, retaining their
+original copyright headers and author attributions.

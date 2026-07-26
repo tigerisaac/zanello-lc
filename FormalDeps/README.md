@@ -1,54 +1,75 @@
-# FormalDeps: homological machinery port (toward Hilbert syzygy)
+# FormalDeps: ported homological prerequisites
 
-Work toward discharging the one non-Stanley gap of the main development,
+Mathlib v4.31 has a generic functorial projective-resolution API, but the
+main development also needs finite global dimension for the polynomial ring —
+**Hilbert's Syzygy Theorem** — together with the depth machinery it rests on.
+This directory supplies them.
 
+What the main development uses from here:
+
+```lean
+theorem Hilberts_Syzygy (k : Type u) [Field k] [Small.{v, u} k] (n : ℕ) :
+    globalDimension.{v} (MvPolynomial (Fin n) k) = n
 ```
-IsTypeTwoLevel I e → HasGradedResolutionPackage I e
-```
 
-whose missing mathematical inputs are minimal graded free resolutions and
-graded Matlis duality. The plan of attack: obtain finite global dimension /
-Hilbert-syzygy machinery for regular rings, then specialize to the graded
-setting.
+surfaced through `FormalDepsBridge.lean` as `FormalDeps.hilbertsSyzygy` and
+`FormalDeps.projectiveDimensionLEOfPolynomial`, and consumed in
+`GradedResolution.lean` as `r3_globalDimension` / `r3_projectiveDimensionLE`.
+That bound is what makes the third syzygy of the Matlis dual projective,
+hence — with the graded-Nakayama/determinant argument in
+`GradedResolution.lean` — free, giving the injectivity of `d₃` in the paper's
+display (1). `ModuloStanley.lean` additionally imports the Rees/depth
+material directly.
 
 ## Provenance
 
-The files under `Mathlib/` here are taken from the public Mathlib fork
+The files under `Port/` are taken from the public Mathlib fork
 [`Thmoas-Guan/mathlib4_fork`](https://github.com/Thmoas-Guan/mathlib4_fork),
-branch `ABS-Criterion-Project-new`, commit `0ff6e01f56` (the
-Auslander–Buchsbaum–Serre criterion project by Nailin Guan et al., Apache
-2.0), and **ported to this project's toolchain (Lean/Mathlib v4.31.0)**: the
-fork is based on a newer Mathlib, so proofs were adapted to v4.31's renamed
-APIs.
+branch `ABS-Criterion-Project-new`, commit `0ff6e01f56` — the
+Auslander–Buchsbaum–Serre criterion project by Nailin Guan, Yongle Hu et al.,
+Apache-2.0 — and **ported to this project's toolchain** (Lean/Mathlib
+v4.31.0). The fork is based on a newer Mathlib, so proofs were adapted to
+v4.31's renamed APIs. The files keep their upstream declaration names,
+copyright headers and author attributions; only their `import` lines are
+rewritten to the `FormalDeps.Port.Mathlib.*` module path, so that they build
+alongside stock Mathlib rather than shadowing it.
 
-The port was originally carried out in a `/tmp` staging area by an agent
-session on 2026-07-14 that was interrupted before re-integrating its work;
-`/tmp` was subsequently cleaned. This tree is a faithful reconstruction:
-base files re-fetched from the fork commit, then the session's 43
-successfully-applied patches replayed from its rollout log.
+These files remain under the Apache-2.0 licence of their origin, not the MIT
+licence of the rest of this repository.
 
-## Building
+## Verifying the port
 
-The files keep their upstream `Mathlib.*` module names and are compiled
-against a shadow copy of Mathlib's olean tree (ported oleans overwrite the
-stock ones):
+Proofs necessarily differ from upstream — that is what porting is. The
+statements must not. `verify-port.sh` checks this mechanically: it fetches
+each file from the upstream commit and compares the statement of every
+theorem and lemma present in both.
 
 ```sh
-lake exe cache get && lake build   # once, for the Mathlib oleans
-zsh FormalDeps/shadowbuild.sh
+sh FormalDeps/verify-port.sh    # needs curl, python3, network access
 ```
 
-## Status (as verified on v4.31.0): the full chain compiles
+Current result: **131 shared statements compared, 0 differ.** One is reported
+as a known equivalence — the port writes `_root_.Submodule.comap` where
+upstream writes `comap`, resolving to the same constant — and is listed
+explicitly in the script rather than silently normalized. Five auxiliary
+upstream lemmas are not carried over, which the script also reports; nothing
+is added. `Hilberts_Syzygy` and `AuslanderBuchsbaum` match upstream
+character for character.
 
-Every file compiles and `AxiomAudit.lean` confirms the key theorems —
-including `Hilberts_Syzygy`, `AuslanderBuchsbaum`,
-`depth_le_ringKrullDim` (Ischebeck),
-`free_of_isMaximalCohenMacaulay_of_isRegularLocalRing`,
-`IsRegularLocalRing.globalDimension_eq_ringKrullDim`, and
-`MvPolynomial.isRegularRing_of_isRegularRing` — depend only on `propext`,
-`Classical.choice`, `Quot.sound`. (The lone `sorry` visible in
-`CohenMacaulay/Maximal.lean` sits inside a block comment; the audit
-proves nothing depends on it.)
+## Axiom audit
+
+The audit runs inside the ordinary `lake build`: `FormalDepsBridge.lean` ends
+with `#print axioms` for every result imported from here, so CI checks them
+on every run along with everything else. All report
+`[propext, Classical.choice, Quot.sound]`.
+
+There is one `sorry` in the tree, at
+`Port/Mathlib/RingTheory/CohenMacaulay/Maximal.lean:46`. It sits inside a
+`/- … -/` block comment, it is present in the upstream original, and it is
+therefore not part of any proof — the axiom audit is what actually
+establishes that nothing depends on it.
+
+## Contents
 
 | File | Key results |
 |---|---|
@@ -64,35 +85,19 @@ proves nothing depends on it.)
 | `RegularRing/Polynomial.lean` | regularity of `R[X]`, `MvPolynomial (Fin n) R` |
 | `RegularRing/GlobalDimension.lean` | `IsRegularRing.globalDimension_eq_ringKrullDim` |
 | `RegularRing/Syzygy.lean` | **`Hilberts_Syzygy`**: `globalDimension (MvPolynomial (Fin n) k) = n` |
-| `RingTheory/RegularLocalRing/Defs.lean`, `RingTheory/Regular/IsSMulRegular.lean` | reference only — stock v4.31 provides these; the build uses the stock versions |
 
-Porting notes for the final four files (beyond the recovered session's
-work): stock v4.31 renamed/privatized `Ideal.primeHeight` (use
-`Ideal.height` and `Ideal.sup_isMaximal_height_eq_ringKrullDim`,
+Stock v4.31 already provides `RingTheory/RegularLocalRing/Defs.lean` and
+`RingTheory/Regular/IsSMulRegular.lean`; the build uses the stock versions and
+they are not vendored here.
+
+## Porting notes
+
+Beyond mechanical import rewriting, the last four files needed real
+adaptation to v4.31: it renamed/privatized `Ideal.primeHeight` (use
+`Ideal.height` with `Ideal.sup_isMaximal_height_eq_ringKrullDim` and
 `Ideal.height_add_one_le_of_lt_of_isPrime`), renamed
 `comap_map_of_isPrime_disjoint` to `under_map_of_isPrime_disjoint`, and
 provides `IsLocalRing.ker_residue` and `Polynomial.height_map_C`. One
-localization instance-path defeq (OreLocalization vs `CommRing`-derived)
-is not exposed across `module` boundaries; `Polynomial.lean` pins it with
-named type arguments plus `by with_unfolding_all exact ...`.
-
-## Remaining gap to the main development
-
-Nothing here is imported by `LogConcavity.lean` yet. `Hilberts_Syzygy`
-supplies the abstract finiteness input (global dimension of
-`k[x₁,x₂,x₃]` is 3). The main tree now contains a separate
-`GradedResolution.lean` module that formalizes the downstream
-certificate-level consequences: finite shifted bases, homogeneous
-minimality/Nakayama certificates, localized Euler bookkeeping, and the
-graded Matlis component identities.
-
-`ModuloStanley.lean` imports the Rees/depth material from this port
-(`FormalDeps.Port.Mathlib.RingTheory.Regular.Depth`) to prove
-`Ext^i(MatlisDual I, R) = 0` for `i < 3`, which is what makes the dualized
-minimal complex exact — the key input to the last-differential arguments.
-With that in place the whole resolution/duality package is built from
-`IsTypeTwoLevel I e` except for one homological fact: that the third free
-module has rank one (`Fintype.card (GradedMinimalFreeComplex.ofLevel hA).β₃
-= 1`). Establishing it needs `Tor₃(M,k) ≅ Soc(M)(-3)`, i.e. a Koszul complex
-on the three variables — the one piece neither this port nor Mathlib 4.31
-supplies.
+localization instance-path defeq (OreLocalization vs `CommRing`-derived) is
+not exposed across `module` boundaries; `Polynomial.lean` pins it with named
+type arguments plus `by with_unfolding_all exact …`.
